@@ -1,0 +1,38 @@
+{
+  "name": "newsletter",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/newsletter/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "webpack-cli build",
+        "args": ["node-env=production"]
+      },
+      "configurations": {
+        "development": {
+          "args": ["node-env=development"]
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "newsletter:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "newsletter:build:development"
+        },
+        "production": {
+          "buildTarget": "newsletter:build:production"
+        }
+      }
+    }
+  }
+}

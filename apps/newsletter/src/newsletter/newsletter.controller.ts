@@ -4,9 +4,10 @@ import { MessagePattern } from '@nestjs/microservices';
 @Controller('newsletter')
 export class NewsletterController {
 
+
     @MessagePattern("subscribe")
-    subscribe(data: any) {
-        console.log("subscribe", data);
+    subscribe(email: string) {
+        console.log("subscribe", email);
         return { status: "ok" };
     }
 }

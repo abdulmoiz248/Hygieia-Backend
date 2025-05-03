@@ -12,6 +12,7 @@ import { microserviceClients } from '../../../client';
         name: microserviceClients[key].name,
         transport: microserviceClients[key].body.transport,
         options: {
+          host: microserviceClients[key].body.options.host,
           port: microserviceClients[key].body.options.port,
         },
       }))

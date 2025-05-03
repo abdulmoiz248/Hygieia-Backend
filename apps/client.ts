@@ -6,7 +6,8 @@ export const microserviceClients: Record<string, { name: string; body: TcpOption
     body: {
       transport: Transport.TCP,
       options: {
-        port: 4001
+        port: 4001,
+        host: '127.0.0.1',
       }
     }
   }

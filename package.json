@@ -6,11 +6,15 @@
   "private": true,
   "dependencies": {
     "@nestjs/common": "^11.1.0",
+    "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.0",
     "@nestjs/microservices": "^11.1.0",
+    "@nestjs/mongoose": "^11.0.3",
     "@nestjs/platform-express": "^11.1.0",
     "@nestjs/testing": "^11.1.0",
+    "@prisma/client": "^6.7.0",
     "axios": "^1.6.0",
+    "mongoose": "^8.14.1",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0"
   },
@@ -33,6 +37,7 @@
     "eslint-config-prettier": "^10.0.0",
     "nx": "20.8.1",
     "prettier": "^2.6.2",
+    "prisma": "^6.7.0",
     "tslib": "^2.3.0",
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.19.0",

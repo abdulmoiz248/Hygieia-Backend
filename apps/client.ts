@@ -10,5 +10,15 @@ export const microserviceClients: Record<string, { name: string; body: TcpOption
         host: '127.0.0.1',
       }
     }
+  },
+  authService: {
+    name: 'AUTH_SERVICE',
+    body: {
+      transport: Transport.TCP,
+      options: {
+        port: 4002,
+        host: '127.0.0.1',
+      }
+    }
   }
 };

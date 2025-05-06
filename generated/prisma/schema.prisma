@@ -14,22 +14,23 @@ model Newsletter {
 }
 
 model User {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   name       String
-  email      String   @unique
+  email      String    @unique
   password   String?
-  role       Role     @default(PATIENT)
-  isVerified Boolean  @default(false)
+  role       Role      @default(PATIENT)
+  isVerified Boolean   @default(false)
   otp        String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  otpExpiry  DateTime?
 }
 
 enum Role {
   PATIENT
   DOCTOR
   ADMIN
-  PHARMACY
-  LAB
+  PHARMACIST
+  LAB_TECHNICIAN
   NUTRITIONIST
 }

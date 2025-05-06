@@ -8,7 +8,8 @@ async function bootstrap() {
     ...microserviceClients.newsletter.body
   });
   app.listen();
-  console.log('[INFO] Newsletter microservice is running on port 4001');
+  console.log(`[INFO] Newsletter Service is running on: ${microserviceClients.newsletter.body.options.port}`);
+ 
 }
 
 

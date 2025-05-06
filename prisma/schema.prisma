@@ -24,13 +24,14 @@ model User {
   otp          String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  otpExpiry    DateTime? 
 }
 
 enum Role {
   PATIENT
   DOCTOR
   ADMIN
-  PHARMACY
-  LAB
+  PHARMACIST
+  LAB_TECHNICIAN
   NUTRITIONIST 
 }

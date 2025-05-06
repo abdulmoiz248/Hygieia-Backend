@@ -134,7 +134,8 @@ exports.Prisma.UserScalarFieldEnum = {
   isVerified: 'isVerified',
   otp: 'otp',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  otpExpiry: 'otpExpiry'
 };
 
 exports.Prisma.SortOrder = {
@@ -155,8 +156,8 @@ exports.Role = exports.$Enums.Role = {
   PATIENT: 'PATIENT',
   DOCTOR: 'DOCTOR',
   ADMIN: 'ADMIN',
-  PHARMACY: 'PHARMACY',
-  LAB: 'LAB',
+  PHARMACIST: 'PHARMACIST',
+  LAB_TECHNICIAN: 'LAB_TECHNICIAN',
   NUTRITIONIST: 'NUTRITIONIST'
 };
 

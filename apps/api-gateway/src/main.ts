@@ -8,7 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
-  const port = process.env.PORT || 4000;
+  const port =  4000;
    // Enable CORS with credentials
    app.enableCors({
     origin: 'http://localhost:3000', // Allow frontend
@@ -17,7 +17,7 @@ async function bootstrap() {
     credentials: true, // Allow cookies/credentials
   });
   await app.listen(port);
-
+  console.log('[INFO] API Gateway is running on: 4000');
 }
 
 bootstrap();

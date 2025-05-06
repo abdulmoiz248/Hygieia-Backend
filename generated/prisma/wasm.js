@@ -125,6 +125,18 @@ exports.Prisma.NewsletterScalarFieldEnum = {
   email: 'email'
 };
 
+exports.Prisma.UserScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  email: 'email',
+  password: 'password',
+  role: 'role',
+  isVerified: 'isVerified',
+  otp: 'otp',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -135,9 +147,22 @@ exports.Prisma.QueryMode = {
   insensitive: 'insensitive'
 };
 
+exports.Prisma.NullsOrder = {
+  first: 'first',
+  last: 'last'
+};
+exports.Role = exports.$Enums.Role = {
+  PATIENT: 'PATIENT',
+  DOCTOR: 'DOCTOR',
+  ADMIN: 'ADMIN',
+  PHARMACY: 'PHARMACY',
+  LAB: 'LAB',
+  NUTRITIONIST: 'NUTRITIONIST'
+};
 
 exports.Prisma.ModelName = {
-  Newsletter: 'Newsletter'
+  Newsletter: 'Newsletter',
+  User: 'User'
 };
 
 /**

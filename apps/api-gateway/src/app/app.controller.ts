@@ -19,4 +19,14 @@ export class AppController {
     async signup(@Body('name') name: string,@Body('email') email: string, @Body('password') password: string, @Body('role') role?: string) {
      return this.authClient.send('signup',{name,email, password,role})
     }
+
+   @Post('verify-otp')
+   async verifyOtp(@Body('email') email: string, @Body('code') code: string) {
+     return this.authClient.send('verify_otp', { email, code });
+   }
+
+   @Post('resend-otp') 
+   async resendOtp(@Body('email') email: string) {
+     return this.authClient.send('resend_otp', { email });
+   }
 }

@@ -63,7 +63,7 @@ export class SignupService {
           this.emailClient.emit('send_otp', { email, otp });
     
           return {
-            statusCode: 201,
+            statusCode: 200,
             message: 'Patient created and OTP sent successfully',
             success: true,
             data: patient,
@@ -81,7 +81,7 @@ export class SignupService {
     
         console.log(`[INFO] ${role} created successfully`);
         return {
-          statusCode: 201,
+          statusCode: 200,
           message: `${role} created successfully`,
           success: true,
           data: userCreated,

@@ -1,9 +1,16 @@
-import { Body, Controller, Post, Get, Req, Res, UseGuards, UnauthorizedException } from '@nestjs/common'
+import { Body, Controller, Post, Get, Req, Res, UseGuards, UnauthorizedException, HttpStatus, UsePipes, ValidationPipe } from '@nestjs/common'
 import { AuthService } from './auth.service'
 import { JwtService } from '@nestjs/jwt'
 import type {  Response } from 'express'
 import { AuthGuard } from '@nestjs/passport'
 import { MessagePattern } from '@nestjs/microservices'
+import { RegisterDto } from './dto/register.dto'
+import { LoginDto } from './dto/login.dto'
+import { VerifyOtpDto } from './dto/verify-otp.dto'
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto'
+import { ResetPasswordDto } from './dto/reset-password.dto'
+import { UpsertUserProfileDto } from './dto/upsert-user-profile.dto'
+import { createSuccessResponse, createErrorResponse } from './dto/api-response.dto'
 
 @Controller()
 export class AuthController {
@@ -97,54 +104,105 @@ async googleCallback(@Req() req, @Res() res: Response) {
 
   // === Microservice patterns ===
   @MessagePattern({ cmd: 'register' })
-  async registerMs(data: { email: string; password: string }) {
-    return this.auth.register(data.email, data.password)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async registerMs(data: RegisterDto) {
+    try {
+      const result = await this.auth.register(data.email, data.password)
+      return createSuccessResponse(result.message, result, 201)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'Registration failed', error.detail, 400)
+    }
   }
 
   @MessagePattern({ cmd: 'verify-otp' })
-  async verifyOtpMs(data: { email: string; otp: string }) {
-    return this.auth.verifyOtp(data.email, data.otp)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async verifyOtpMs(data: VerifyOtpDto) {
+    try {
+      const result = await this.auth.verifyOtp(data.email, data.otp)
+      return createSuccessResponse(result.message, result, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'OTP verification failed', error.detail, error.status || 400)
+    }
   }
 
   @MessagePattern({ cmd: 'login' })
-  async loginMs(data: { email: string; password: string }) {
-    const user = await this.auth.validateUser(data.email, data.password)
-    return this.auth.login(user)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async loginMs(data: LoginDto) {
+    try {
+      const user = await this.auth.validateUser(data.email, data.password)
+      const result = await this.auth.login(user)
+      return createSuccessResponse(result.message, result, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'Login failed', error.detail, error.status || 401)
+    }
   }
 
   @MessagePattern({ cmd: 'request-password-reset' })
-  async requestPasswordResetMs(data: { email: string }) {
-    return this.auth.requestPasswordReset(data.email)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async requestPasswordResetMs(data: RequestPasswordResetDto) {
+    try {
+      const result = await this.auth.requestPasswordReset(data.email)
+      return createSuccessResponse(result.message, result, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'Password reset request failed', error.detail, error.status || 400)
+    }
   }
 
   @MessagePattern({ cmd: 'verify-reset-otp' })
-  async VerifyResetOtp(data: { email: string, otp: string}) {
-    return this.auth.verifyResetOtp(data.email,data.otp)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async VerifyResetOtp(data: VerifyOtpDto) {
+    try {
+      const result = await this.auth.verifyResetOtp(data.email, data.otp)
+      return createSuccessResponse(result.message, result, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'OTP verification failed', error.detail, error.status || 400)
+    }
   }
 
   @MessagePattern({ cmd: 'reset-password' })
-  async resetPasswordMs(data: { email: string; otp: string; newPassword: string }) {
-    return this.auth.resetPassword(data.email, data.otp, data.newPassword)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async resetPasswordMs(data: ResetPasswordDto) {
+    try {
+      const result = await this.auth.resetPassword(data.email, data.otp, data.newPassword)
+      return createSuccessResponse(result.message, result, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'Password reset failed', error.detail, error.status || 400)
+    }
   }
 
 @MessagePattern({ cmd: 'user-data' })
 async getUserData(payload: { id: string; role: string }) {
-  const { id, role } = payload
-  return await this.auth.getUserByRoleAndId(role, id)
+  try {
+    const { id, role } = payload
+    const result = await this.auth.getUserByRoleAndId(role, id)
+    return createSuccessResponse('User profile fetched successfully', {...result}, 200)
+  } catch (error: any) {
+    return createErrorResponse(error.message || 'Failed to fetch user data', error.detail, error.status || 400)
+  }
 }
 
 
 @MessagePattern({ cmd: 'upload-user-photo' })
 async uploadUserPhoto(payload: { role: string; userId: string; fileBuffer: Buffer }) {
-  const { role, userId, fileBuffer } = payload
-  return await this.auth.upsertUserProfilePhoto(role, userId, fileBuffer)
+  try {
+    const { role, userId, fileBuffer } = payload
+    const result = await this.auth.upsertUserProfilePhoto(role, userId, fileBuffer)
+    return createSuccessResponse('Profile photo updated successfully', result, 200)
+  } catch (error: any) {
+    return createErrorResponse(error.message || 'Failed to upload profile photo', error.detail, error.status || 400)
+  }
 }
 
 
 @MessagePattern({ cmd: 'upsert-user-profile' })
 async upsertUserProfile(payload: { role: string; profileData: Record<string, any> }) {
-  const { role, profileData } = payload
-  return await this.auth.upsertUserProfileByRole(role, profileData.profileData)
+  try {
+    const { role, profileData } = payload
+    const result = await this.auth.upsertUserProfileByRole(role, profileData.profileData)
+    return createSuccessResponse('Profile upserted successfully', result, 200)
+  } catch (error: any) {
+    return createErrorResponse(error.message || 'Failed to upsert user profile', error.detail, error.status || 400)
+  }
 }
 
 
@@ -152,9 +210,14 @@ async upsertUserProfile(payload: { role: string; profileData: Record<string, any
 
   @MessagePattern({ cmd: 'me' })
   async meMs(token: string) {
-    return this.jwt.verify(token)
+    try {
+      if (!token) {
+        throw new UnauthorizedException('Token is required')
+      }
+      const decoded = await this.jwt.verify(token)
+      return createSuccessResponse('Token verified successfully', decoded, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'Invalid token', error.detail, 401)
+    }
   }
-
-
-
 }

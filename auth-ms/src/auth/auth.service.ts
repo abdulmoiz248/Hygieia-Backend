@@ -39,6 +39,15 @@ export class AuthService {
 
   async verifyResetOtp(email: string, otp: string) {
     console.log(`[INFO: AUTH SERVICE] Verifying reset OTP for ${email}`)
+    
+    // Validate inputs
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+    if (!otp || otp.length !== 6 || isNaN(Number(otp))) {
+      throw new BadRequestException('OTP must be a 6-digit number')
+    }
+
     const { data, error } = await this.supabase.getClient()
       .from('users')
       .select('*')
@@ -47,11 +56,11 @@ export class AuthService {
 
     if (error || !data) {
       console.error(`[INFO: AUTH SERVICE] Invalid email for reset OTP: ${email}`)
-      throw new UnauthorizedException('Invalid email')
+      throw new UnauthorizedException('Email not found in our system')
     }
     if (data.otp !== otp) {
       console.error(`[INFO: AUTH SERVICE] Invalid OTP for ${email}`)
-      throw new BadRequestException('Invalid OTP')
+      throw new BadRequestException('Invalid or expired OTP')
     }
 
     console.log(`[INFO: AUTH SERVICE] OTP verified successfully for ${email}`)
@@ -60,6 +69,17 @@ export class AuthService {
 
   async register(email: string, password: string) {
     console.log(`[INFO: AUTH SERVICE] Registering new user with email: ${email}`)
+    
+    // Validate email format
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+    
+    // Validate password
+    if (!this.isValidPassword(password)) {
+      throw new BadRequestException('Password must be at least 8 characters and contain uppercase, lowercase, and numbers')
+    }
+
     const hash = await bcrypt.hash(password, 10)
     const otp = crypto.randomInt(100000, 999999).toString()
 
@@ -90,13 +110,13 @@ export class AuthService {
           return { message: 'Account not verified yet. New OTP sent to email', success: true }
         }
 
-        throw new ConflictException('Email already exists and is verified')
+        throw new ConflictException('This email is already registered and verified')
       }
-      throw new Error(error.message)
+      throw new BadRequestException('Failed to register user. Please try again later')
     }
 
     await this.sendOtpEmail(email, otp, false)
-    return { message: 'Registered successfully, OTP sent to email', success: true }
+    return { message: 'Registered successfully. OTP sent to your email', success: true }
   }
 
   async registerOAuth(email: string) {
@@ -132,6 +152,15 @@ export class AuthService {
 
   async verifyOtp(email: string, otp: string) {
     console.log(`[INFO: AUTH SERVICE] Verifying OTP for ${email}`)
+    
+    // Validate inputs
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+    if (!otp || otp.length !== 6 || isNaN(Number(otp))) {
+      throw new BadRequestException('OTP must be a 6-digit number')
+    }
+
     const { data, error } = await this.supabase.getClient()
       .from('users')
       .select('*')
@@ -140,11 +169,11 @@ export class AuthService {
 
     if (error || !data) {
       console.error(`[INFO: AUTH SERVICE] Invalid email for OTP verification: ${email}`)
-      throw new UnauthorizedException('Invalid email')
+      throw new UnauthorizedException('Email not found in our system')
     }
     if (data.otp !== otp) {
       console.error(`[INFO: AUTH SERVICE] Invalid OTP for ${email}`)
-      throw new BadRequestException('Invalid OTP')
+      throw new BadRequestException('Invalid or expired OTP')
     }
 
     await this.supabase.getClient()
@@ -161,6 +190,15 @@ export class AuthService {
 
   async validateUser(email: string, pass: string) {
     console.log(`[INFO: AUTH SERVICE] Validating user ${email}`)
+    
+    // Validate inputs
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+    if (!pass || pass.trim().length === 0) {
+      throw new BadRequestException('Password is required')
+    }
+
     const { data, error } = await this.supabase.getClient()
       .from('users')
       .select('*')
@@ -169,17 +207,17 @@ export class AuthService {
 
     if (error || !data) {
       console.error(`[INFO: AUTH SERVICE] Invalid credentials for ${email}`)
-      throw new UnauthorizedException('invalid creds')
+      throw new UnauthorizedException('Invalid email or password')
     }
     if (!data.is_verified) {
       console.error(`[INFO: AUTH SERVICE] Email not verified: ${email}`)
-      throw new UnauthorizedException('Email not verified')
+      throw new UnauthorizedException('Email not verified. Please verify your email first')
     }
 
     const isMatch = await bcrypt.compare(pass, data.password_hash)
     if (!isMatch) {
       console.error(`[INFO: AUTH SERVICE] Password mismatch for ${email}`)
-      throw new UnauthorizedException('invalid creds')
+      throw new UnauthorizedException('Invalid email or password')
     }
 
     console.log(`[INFO: AUTH SERVICE] User validated: ${email}`)
@@ -188,11 +226,17 @@ export class AuthService {
 
   async login(user: any) {
     console.log(`[INFO: AUTH SERVICE] Logging in user ${user.email}`)
+    
+    if (!user || !user.id || !user.email) {
+      throw new BadRequestException('Invalid user data')
+    }
+
     const payload = { sub: user.id, email: user.email, role: user.role }
     return {
       accessToken: this.jwt.sign(payload),
       role: user.role,
       id: user.id,
+      email: user.email,
       success: true,
       message: 'Login successful'
     }
@@ -200,6 +244,12 @@ export class AuthService {
 
   async requestPasswordReset(email: string) {
     console.log(`[INFO: AUTH SERVICE] Password reset requested for ${email}`)
+    
+    // Validate email
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+
     const { data: existingUser, error: fetchError } = await this.supabase.getClient()
       .from('users')
       .select('id')
@@ -208,26 +258,42 @@ export class AuthService {
 
     if (!existingUser) {
       console.error(`[INFO: AUTH SERVICE] No such user found: ${email}`)
-      return { message: 'No Such user found', success: false }
+      // Return generic message for security
+      return { message: 'If an account exists with this email, a password reset OTP has been sent', success: true }
     }
+
     const otp = crypto.randomInt(100000, 999999).toString()
 
     const { error } = await this.supabase.getClient()
       .from('users')
       .update({ otp })
       .eq('email', email)
+    
+      console.log(`[INFO: AUTH SERVICE] OTP updated for password reset for ${email} otp: ${otp}`)
 
     if (error) {
       console.error(`[INFO: AUTH SERVICE] Failed to update OTP for ${email}: ${error.message}`)
-      throw new Error(error.message)
+      throw new BadRequestException('Failed to process password reset request. Please try again')
     }
 
     await this.sendOtpEmail(email, otp, true)
-    return { message: 'Password reset OTP sent to email', success: true }
+    return { message: 'Password reset OTP sent to your email', success: true }
   }
 
   async resetPassword(email: string, otp: string, newPassword: string) {
     console.log(`[INFO: AUTH SERVICE] Resetting password for ${email}`)
+    
+    // Validate inputs
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+    if (!otp || otp.length !== 6 || isNaN(Number(otp))) {
+      throw new BadRequestException('OTP must be a 6-digit number')
+    }
+    if (!this.isValidPassword(newPassword)) {
+      throw new BadRequestException('Password must be at least 8 characters and contain uppercase, lowercase, and numbers')
+    }
+
     const { data, error } = await this.supabase.getClient()
       .from('users')
       .select('*')
@@ -236,11 +302,11 @@ export class AuthService {
 
     if (error || !data) {
       console.error(`[INFO: AUTH SERVICE] Invalid email for password reset: ${email}`)
-      throw new UnauthorizedException('Invalid email')
+      throw new UnauthorizedException('Email not found in our system')
     }
     if (data.otp !== otp) {
       console.error(`[INFO: AUTH SERVICE] Invalid OTP for password reset: ${email}`)
-      throw new BadRequestException('Invalid OTP')
+      throw new BadRequestException('Invalid or expired OTP')
     }
 
     const hash = await bcrypt.hash(newPassword, 10)
@@ -467,6 +533,23 @@ export class AuthService {
   toDbProfile(profileData: Record<string, any>) {
     const { dateofbirth, email, role, success,message, ...rest } = profileData
     return { ...rest, dateofbirth: dateofbirth }
+  }
+
+  /**
+   * Validate email format
+   */
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  /**
+   * Validate password strength
+   */
+  private isValidPassword(password: string): boolean {
+    // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+    return passwordRegex.test(password)
   }
 
   async upsertUserProfilePhoto(role: string, userId: string, fileBuffer: any) {

@@ -11,6 +11,7 @@ import { InjectModel } from '@nestjs/mongoose'
 import { Profile, ProfileDocument } from 'src/schema/patient.profile.schema'
 import { Model } from 'mongoose'
 import { NutritionistProfile, NutritionistProfileDocument } from 'src/schema/nutritionist-profile.schema'
+import { DoctorProfile, DoctorProfileDocument } from 'src/schema/doctor-profile.schema'
 import { FitbitService } from '../fitbit/fitbit.service'
 
 @Injectable()
@@ -22,6 +23,7 @@ export class AuthService {
     private configService: ConfigService,
     @InjectModel(Profile.name) private profileModel: Model<ProfileDocument>,
     @InjectModel(NutritionistProfile.name) private nutModel:Model<NutritionistProfileDocument>,
+    @InjectModel(DoctorProfile.name) private doctorModel: Model<DoctorProfileDocument>,
     private fitbitService: FitbitService,
   ) {
     cloudinary.config({
@@ -35,6 +37,17 @@ export class AuthService {
     console.log(`[INFO: AUTH SERVICE] Sending OTP email to ${email}`)
     const event = isPasswordReset ? 'send-password-reset-otp-email' : 'send-otp-verification-email'
     this.mailerClient.emit(event, { email, otp })
+  }
+
+  private async sendCredentialsEmail(personalEmail: string, workEmail: string, password: string, name: string, role: string) {
+    console.log(`[INFO: AUTH SERVICE] Sending credentials email to ${personalEmail}`)
+    this.mailerClient.emit('send-worker-credentials-email', { 
+      personalEmail, 
+      workEmail, 
+      password, 
+      name, 
+      role 
+    })
   }
 
   async verifyResetOtp(email: string, otp: string) {
@@ -67,6 +80,131 @@ export class AuthService {
     return { success: true, message: 'OTP verified successfully' }
   }
 
+  async registerWorkers(name: string, role: string, personalEmail: string) {
+    console.log(`[INFO: AUTH SERVICE] Registering new worker with name: ${name} and role: ${role}`)
+    
+    // Validate inputs
+    if (!name || name.trim().length === 0) {
+      throw new BadRequestException('Name is required')
+    }
+    if (!role || !['doctor', 'nutritionist', 'lab-technician'].includes(role)) {
+      throw new BadRequestException('Invalid role. Must be doctor, nutritionist, or lab-technician')
+    }
+    if (!this.isValidEmail(personalEmail)) {
+      throw new BadRequestException('Valid personal email is required')
+    }
+
+    // Generate email from name
+    let baseEmail = name.toLowerCase().replace(/\s+/g, '') + '@hygieia.com'
+    let email = baseEmail
+    let counter = 1
+
+    // Check for email duplicates and increment if needed
+    while (true) {
+      const { data: existingUser } = await this.supabase.getClient()
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single()
+
+      if (!existingUser) break
+      
+      email = name.toLowerCase().replace(/\s+/g, '') + counter + '@hygieia.com'
+      counter++
+    }
+
+    // Generate random password
+    const password = crypto.randomBytes(8).toString('hex') + 'A1'
+    const hash = await bcrypt.hash(password, 10)
+
+    // Create user in users table
+    const { data: userData, error: userError } = await this.supabase.getClient()
+      .from('users')
+      .insert([{ email, password_hash: hash, role, is_verified: true }])
+      .select()
+      .single()
+
+    if (userError) {
+      console.error(`[INFO: AUTH SERVICE] Worker registration error: ${userError.message}`)
+      throw new BadRequestException('Failed to register worker. Please try again later')
+    }
+
+    // Create profile based on role
+    let profileData
+    if (role === 'doctor') {
+      profileData = {
+        id: userData.id,
+        name,
+        phone: '',
+        gender: '',
+        dateofbirth: '',
+        img: '',
+        specialization: 'General Medicine',
+        experienceYears: 0,
+        certifications: [],
+        education: [],
+        languages: ['English'],
+        bio: '',
+        consultationFee: 0,
+        workingHours: [],
+        rating: 0
+      }
+      
+      const newDoctor = new this.doctorModel(profileData)
+      await newDoctor.save()
+    } else if (role === 'nutritionist') {
+      profileData = {
+        id: userData.id,
+        name,
+        phone: '',
+        gender: '',
+        dateofbirth: '',
+        img: '',
+        specialization: 'General Nutrition',
+        experienceYears: 0,
+        certifications: [],
+        education: [],
+        languages: ['English'],
+        bio: '',
+        consultationFee: 0,
+        workingHours: [],
+        rating: 0
+      }
+      
+      const newNutritionist = new this.nutModel(profileData)
+      await newNutritionist.save()
+    } else if (role === 'lab-technician') {
+      // Create lab technician profile in Supabase
+      const labProfileData = {
+        id: userData.id,
+        name,
+        phone: '',
+        gender: '',
+        dateofbirth: '',
+        img: ''
+      }
+      
+      const { error: labError } = await this.supabase.getClient()
+        .from('lab_technician_profiles')
+        .insert([labProfileData])
+      
+      if (labError) {
+        console.error(`[INFO: AUTH SERVICE] Lab technician profile creation error: ${labError.message}`)
+        // Continue anyway, profile can be created later
+      }
+    }
+
+    // Send credentials to personal email
+    await this.sendCredentialsEmail(personalEmail, email, password, name, role)
+
+    console.log(`[INFO: AUTH SERVICE] Worker registered successfully: ${email}`)
+    return { 
+      message: 'Worker registered successfully. Credentials sent to personal email.', 
+      success: true,
+      email,
+      id: userData.id
+    }
+  }
   async register(email: string, password: string) {
     console.log(`[INFO: AUTH SERVICE] Registering new user with email: ${email}`)
     
@@ -116,6 +254,44 @@ export class AuthService {
     }
 
     await this.sendOtpEmail(email, otp, false)
+    
+    // Create initial patient profile with mock data
+    const patientProfileData = {
+      id: data[0].id,
+      name: '',
+      phone: '',
+      dateOfBirth: '',
+      address: '',
+      emergencyContact: '',
+      bloodType: '',
+      allergies: '',
+      conditions: '',
+      medications: '',
+      avatar: '',
+      gender: '',
+      weight: 0,
+      height: 0,
+      vaccines: '',
+      ongoingMedications: '',
+      surgeryHistory: '',
+      implants: '',
+      pregnancyStatus: '',
+      menstrualCycle: '',
+      mentalHealth: '',
+      familyHistory: '',
+      organDonor: '',
+      disabilities: '',
+      lifestyle: '',
+      healthscore: 0,
+      adherence: '',
+      missed_doses: '',
+      doses_taken: '',
+      limit: {}
+    }
+    
+    const newPatient = new this.profileModel(patientProfileData)
+    await newPatient.save()
+    
     return { message: 'Registered successfully. OTP sent to your email', success: true }
   }
 
@@ -416,12 +592,8 @@ export class AuthService {
       break
 
     case 'doctor':
-      const { data: doc } = await this.supabase.getClient()
-        .from('doctor_profiles')
-        .select('*')
-        .eq('id', id)
-        .single()
-      if (doc) profile = doc
+      const mongoDoc = await this.doctorModel.findOne({ id }).lean().exec()
+      if (mongoDoc) profile = mongoDoc
       break
 
     case 'patient':
@@ -476,16 +648,18 @@ export class AuthService {
       break
 
     case 'doctor':
-      const { data: doc, error: docErr } = await client
-        .from('doctor_profiles')
-        .upsert(profileData, { onConflict: 'id' })
-        .select('*')
-        .single()
-      if (docErr) {
-        console.error(`[INFO: AUTH SERVICE] Upsert failed for doctor: ${docErr.message}`)
-        throw new BadRequestException(docErr.message)
+      console.log("Upserting Doctor Data...")
+      const existingDoc = await this.doctorModel.findOne({ id: profileData.id }).exec()
+      if (existingDoc) {
+        profile = await this.doctorModel.findOneAndUpdate(
+          { id: profileData.id },
+          { $set: profileData },
+          { new: true },
+        ).lean().exec()
+      } else {
+        const createdDoc = new this.doctorModel(profileData)
+        profile = await createdDoc.save()
       }
-      profile = doc
       break
 
     case 'patient':
@@ -591,14 +765,17 @@ export class AuthService {
       .single())
     break
   case 'doctor':
-    ({ error } = await client
-      .from('doctor_profiles')
-      .upsert(
-        { id: userId, img: imgUrl }, 
-        { onConflict: 'id' }
-      )
-      .select('*')
-      .single())
+    const existingDocPhoto = await this.doctorModel.findOne({ id: userId }).exec()
+    if (existingDocPhoto) {
+      await this.doctorModel.findOneAndUpdate(
+        { id: userId },
+        { $set: { img: imgUrl } },
+        { new: true },
+      ).lean().exec()
+    } else {
+      const createdDocPhoto = new this.doctorModel({ id: userId, img: imgUrl })
+      await createdDocPhoto.save()
+    }
     break
   case 'patient':
     ({ error } = await client

@@ -13,6 +13,7 @@ import { Profile,ProfileSchema } from 'src/schema/patient.profile.schema'
 import { NutritionistProfile, NutritionistProfileSchema } from 'src/schema/nutritionist-profile.schema'
 import { FitbitModule } from '../fitbit/fitbit.module'
 import { ClientsModule, Transport } from '@nestjs/microservices'
+import { DoctorProfile, DoctorProfileSchema } from 'src/schema/doctor-profile.schema'
 
 
 @Module({
@@ -20,7 +21,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices'
     SupabaseModule,
     PassportModule,
     FitbitModule,
-    MongooseModule.forFeature([{ name: Profile.name, schema: ProfileSchema },{ name: NutritionistProfile.name, schema: NutritionistProfileSchema }]),
+    MongooseModule.forFeature([{ name: Profile.name, schema: ProfileSchema },{ name: NutritionistProfile.name, schema: NutritionistProfileSchema },{name:DoctorProfile.name,schema:DoctorProfileSchema}]),
     ClientsModule.register([
       {
         name: 'MAILER_SERVICE',

@@ -30,4 +30,18 @@ export class AuthController {
   async handleWelcomeEmail(@Payload() data: { email: string; name?: string }) {
     await this.authService.handleWelcomeEmail(data);
   }
+
+  /**
+   * Handle worker credentials email event
+   */
+  @MessagePattern('send-worker-credentials-email')
+  async handleWorkerCredentialsEmail(@Payload() data: { 
+    personalEmail: string; 
+    workEmail: string; 
+    password: string; 
+    name: string; 
+    role: string 
+  }) {
+    await this.authService.handleWorkerCredentialsEmail(data);
+  }
 }

@@ -32,6 +32,15 @@ export class AuthController {
     }
   }
 
+  @Post('register-worker')
+  async registerWorker(@Body() body: { name: string; role: string; personalEmail: string }) {
+    try {
+      return await firstValueFrom(this.authClient.send({ cmd: 'register-worker' }, body))
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Worker registration failed')
+    }
+  }
+
 
    
 @Get('user')

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { generateOtpVerificationEmail } from 'src/helpers/generateOtpVerificationEmail';
 import { generatePasswordResetOtpEmail } from 'src/helpers/generatePasswordResetOtpEmail';
 import { generateWelcomeEmail } from 'src/helpers/generateWelcomeEmail';
+import { generateWorkerCredentialsEmail } from 'src/helpers/generateWorkerCredentialsEmail';
 import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
@@ -41,6 +42,30 @@ export class AuthService {
       data.email,
       'Welcome to Hygieia - Your Healthcare Journey Begins!',
       generateWelcomeEmail(data.email, data.name)
+    );
+  }
+
+  /**
+   * Send worker credentials email to personal email
+   */
+  async handleWorkerCredentialsEmail(data: { 
+    personalEmail: string; 
+    workEmail: string; 
+    password: string; 
+    name: string; 
+    role: string 
+  }) {
+    console.log(`[MAILER SERVICE] Sending worker credentials email to ${data.personalEmail}`);
+    await this.mailService.sendMail(
+      data.personalEmail,
+      `Welcome to Hygieia Team - Your ${data.role} Account Details`,
+      generateWorkerCredentialsEmail(
+        data.personalEmail, 
+        data.workEmail, 
+        data.password, 
+        data.name, 
+        data.role
+      )
     );
   }
 }

@@ -5,6 +5,7 @@ import type {  Response } from 'express'
 import { AuthGuard } from '@nestjs/passport'
 import { MessagePattern } from '@nestjs/microservices'
 import { RegisterDto } from './dto/register.dto'
+import { RegisterWorkerDto } from './dto/register-worker.dto'
 import { LoginDto } from './dto/login.dto'
 import { VerifyOtpDto } from './dto/verify-otp.dto'
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto'
@@ -113,7 +114,16 @@ async googleCallback(@Req() req, @Res() res: Response) {
       return createErrorResponse(error.message || 'Registration failed', error.detail, 400)
     }
   }
-
+  @MessagePattern({ cmd: 'register-worker' })
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async registerWorkerMs(data: RegisterWorkerDto) {
+    try {
+      const result = await this.auth.registerWorkers(data.name, data.role, data.personalEmail)
+      return createSuccessResponse(result.message, result, 201)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'Worker registration failed', error.detail, error.status || 400)
+    }
+  }
   @MessagePattern({ cmd: 'verify-otp' })
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async verifyOtpMs(data: VerifyOtpDto) {

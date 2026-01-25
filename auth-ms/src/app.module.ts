@@ -12,6 +12,7 @@ import { NutritionistsModule } from './nutritionists/nutritionists.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { FitbitModule } from './fitbit/fitbit.module';
+import { DoctorsModule } from './doctors/doctors.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { FitbitModule } from './fitbit/fitbit.module';
      NutritionistsModule,
      NotificationsModule,
      NewsletterModule,
+     DoctorsModule,
   ],
 })
 export class AppModule {}

@@ -2,8 +2,8 @@ name: Scheduled Data Check
 
 on:
   schedule:
-    # Run every 2 days at 00:00 UTC (adjust time as needed)
-    - cron: '0 0 */2 * *'
+    # Run every hour
+    - cron: '0 * * * *'
   # Allow manual trigger
   workflow_dispatch:
 

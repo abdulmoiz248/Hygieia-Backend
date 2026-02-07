@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { SupabaseClient, createClient } from '@supabase/supabase-js'
 import { UploadApiResponse, v2 as cloudinary } from 'cloudinary'
@@ -7,6 +7,7 @@ import { CreateCvDto } from './dto/create-cv.dto'
 import { UpdateCvDto } from './dto/update-cv.dto'
 import { MailerService } from 'src/mailer-service/mailer-service.service'
 import { ClientProxy } from '@nestjs/microservices/client/client-proxy'
+import axios from 'axios'
 
 @Injectable()
 export class CvService {
@@ -32,79 +33,168 @@ export class CvService {
  async create(dto: CreateCvDto, file?: { buffer: string; mimetype: string }) {
   console.log('[CV MS] create called with dto:', dto)
 
-  // step 1: check if email already exists
-  const { data: existing, error: checkError } = await this.supabase
-    .from('cv')
-    .select('id')
-    .eq('email', dto.email)
-    .maybeSingle()
+  try {
+    // step 1: check if email already exists
+    const { data: existing, error: checkError } = await this.supabase
+      .from('cv')
+      .select('id')
+      .eq('email', dto.email)
+      .maybeSingle()
 
-  if (checkError) {
-    console.error('[CV MS] error checking for existing email:', checkError)
-    throw checkError
+    if (checkError) {
+      console.error('[CV MS] error checking for existing email:', checkError)
+      throw new InternalServerErrorException('Failed to validate email uniqueness')
+    }
+
+    if (existing) {
+      console.warn('[CV MS] email already exists:', dto.email)
+      throw new ConflictException('A CV with this email already exists')
+    }
+
+    // step 2: upload file if present
+    let cvLink: string | null = null
+    if (file) {
+      console.log('[CV MS] uploading file to Cloudinary...')
+      try {
+        const buffer = Buffer.from(file.buffer, 'base64')
+        cvLink = await this.uploadCvFile(buffer, file.mimetype)
+        console.log('[CV MS] file uploaded, cvLink:', cvLink)
+      } catch (uploadError) {
+        console.error('[CV MS] file upload failed:', uploadError)
+        throw new InternalServerErrorException('Failed to upload CV file')
+      }
+    }
+
+    // step 3: insert into supabase
+    const insertPayload = { ...dto, cvLink }
+    console.log('[CV MS] inserting into Supabase:', insertPayload)
+
+    const { data, error } = await this.supabase
+      .from('cv')
+      .insert([insertPayload])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[CV MS] Supabase insert error:', error)
+      throw new InternalServerErrorException('Failed to save CV to database')
+    }
+
+    console.log('[CV MS] insert success:', data)
+
+    // step 4: emit mailer event
+    this.mailerClient.emit('cv-received', { email: dto.email })
+
+    // step 5: send to embeddings service if CV was uploaded
+    if (cvLink) {
+      try {
+        const embeddingsServiceUrl = this.configService.get<string>('EMBEDDINGS_SERVICE_URL') || 'http://localhost:4008'
+        console.log('[CV MS] sending CV to embeddings service:', embeddingsServiceUrl)
+        
+        await axios.post(`${embeddingsServiceUrl}/cv/generate-embeddings`, {
+          cv_id: data.id,
+          cv_url: cvLink,
+          email: dto.email
+        }, {
+          timeout: 10000
+        })
+        
+        console.log('[CV MS] embeddings generation initiated for CV:', data.id)
+      } catch (embeddingError) {
+        // Log error but don't fail the request
+        console.error('[CV MS] failed to initiate embeddings generation:', embeddingError.message)
+      }
+    }
+
+    return data
+  } catch (error) {
+    console.error('[CV MS] create error:', error)
+    if (error instanceof BadRequestException || 
+        error instanceof ConflictException || 
+        error instanceof InternalServerErrorException) {
+      throw error
+    }
+    throw new InternalServerErrorException('An unexpected error occurred while creating CV')
   }
-
-  if (existing) {
-    console.warn('[CV MS] email already exists:', dto.email)
-    throw { status: 409, message: 'Email already exists' }
-  }
-
-  // step 2: upload file if present
-  let cvLink: string | null = null
-  if (file) {
-    console.log('[CV MS] uploading file to Cloudinary...')
-    const buffer = Buffer.from(file.buffer, 'base64')
-    cvLink = await this.uploadCvFile(buffer, file.mimetype)
-    console.log('[CV MS] file uploaded, cvLink:', cvLink)
-  }
-
-  // step 3: insert into supabase
-  const insertPayload = { ...dto, cvLink }
-  console.log('[CV MS] inserting into Supabase:', insertPayload)
-
-  const { data, error } = await this.supabase
-    .from('cv')
-    .insert([insertPayload])
-    .select()
-    .single()
-
-  if (error) {
-    console.error('[CV MS] Supabase insert error:', error)
-    throw error
-  }
-
-
-  console.log('[CV MS] insert success:', data)
-
-  this.mailerClient.emit('cv-received', { email: dto.email })
-  return data
 }
 
 
   async update(id: string, dto: UpdateCvDto, file?: { buffer: string; mimetype: string }) {
     console.log('[CV MS] update called for id:', id, 'dto:', dto)
 
-    let cvLink: string | null = null
+    try {
+      // Check if CV exists
+      const { data: existingCv, error: findError } = await this.supabase
+        .from('cv')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
 
-    if (file) {
-      console.log('[CV MS] uploading new file to Cloudinary...')
-      const buffer = Buffer.from(file.buffer, 'base64')
-      cvLink = await this.uploadCvFile(buffer, file.mimetype)
-      console.log('[CV MS] new file uploaded, cvLink:', cvLink)
+      if (findError) {
+        console.error('[CV MS] error finding CV:', findError)
+        throw new InternalServerErrorException('Failed to find CV')
+      }
+
+      if (!existingCv) {
+        throw new NotFoundException('CV not found')
+      }
+
+      let cvLink: string | null = null
+
+      if (file) {
+        console.log('[CV MS] uploading new file to Cloudinary...')
+        try {
+          const buffer = Buffer.from(file.buffer, 'base64')
+          cvLink = await this.uploadCvFile(buffer, file.mimetype)
+          console.log('[CV MS] new file uploaded, cvLink:', cvLink)
+        } catch (uploadError) {
+          console.error('[CV MS] file upload failed:', uploadError)
+          throw new InternalServerErrorException('Failed to upload CV file')
+        }
+      }
+
+      const updatePayload: any = { ...dto }
+      if (cvLink) updatePayload.cvLink = cvLink
+
+      console.log('[CV MS] updating Supabase with payload:', updatePayload)
+
+      const { data, error } = await this.supabase.from('cv').update(updatePayload).eq('id', id).select().single()
+      if (error) {
+        console.error('[CV MS] Supabase update error:', error)
+        throw new InternalServerErrorException('Failed to update CV')
+      }
+      
+      console.log('[CV MS] update success:', data)
+      
+      // Update embeddings if new CV file was uploaded
+      if (cvLink) {
+        try {
+          const embeddingsServiceUrl = this.configService.get<string>('EMBEDDINGS_SERVICE_URL') || 'http://embeddings:4008'
+          console.log('[CV MS] updating embeddings for CV:', id)
+          
+          await axios.post(`${embeddingsServiceUrl}/cv/generate-embeddings`, {
+            cv_id: data.id,
+            cv_url: cvLink,
+            email: data.email
+          }, {
+            timeout: 10000
+          })
+          
+          console.log('[CV MS] embeddings update initiated for CV:', data.id)
+        } catch (embeddingError) {
+          console.error('[CV MS] failed to update embeddings:', embeddingError.message)
+        }
+      }
+      
+      return data
+    } catch (error) {
+      console.error('[CV MS] update error:', error)
+      if (error instanceof NotFoundException || 
+          error instanceof InternalServerErrorException) {
+        throw error
+      }
+      throw new InternalServerErrorException('An unexpected error occurred while updating CV')
     }
-
-    const updatePayload: any = { ...dto }
-    if (cvLink) updatePayload.cvLink = cvLink
-
-    console.log('[CV MS] updating Supabase with payload:', updatePayload)
-
-    const { data, error } = await this.supabase.from('cv').update(updatePayload).eq('id', id).select().single()
-    if (error) {
-      console.error('[CV MS] Supabase update error:', error)
-      throw error
-    }
-    console.log('[CV MS] update success:', data)
-    return data
   }
 
   private async uploadCvFile(fileBuffer: Buffer, mimeType: string): Promise<string> {
@@ -134,13 +224,21 @@ export class CvService {
 
   async findAll() {
     console.log('[CV MS] findAll called')
-    const { data, error } = await this.supabase.from('cv').select('*')
-    if (error) {
-      console.error('[CV MS] Supabase findAll error:', error)
-      throw error
+    try {
+      const { data, error } = await this.supabase.from('cv').select('*')
+      if (error) {
+        console.error('[CV MS] Supabase findAll error:', error)
+        throw new InternalServerErrorException('Failed to retrieve CVs')
+      }
+      console.log('[CV MS] findAll success, count:', data?.length)
+      return data
+    } catch (error) {
+      console.error('[CV MS] findAll error:', error)
+      if (error instanceof InternalServerErrorException) {
+        throw error
+      }
+      throw new InternalServerErrorException('An unexpected error occurred while retrieving CVs')
     }
-    console.log('[CV MS] findAll success, count:', data?.length)
-    return data
   }
 
   async findOne(id: string) {
@@ -156,60 +254,42 @@ export class CvService {
 
   async remove(id: string) {
     console.log('[CV MS] remove called for id:', id)
-    const { data, error } = await this.supabase.from('cv').delete().eq('id', id).select().maybeSingle()
-    if (error) {
-      console.error('[CV MS] Supabase remove error:', error)
-      throw error
+    try {
+      const { data, error } = await this.supabase.from('cv').delete().eq('id', id).select().maybeSingle()
+      if (error) {
+        console.error('[CV MS] Supabase remove error:', error)
+        throw new InternalServerErrorException('Failed to delete CV')
+      }
+      if (!data) {
+        console.error('[CV MS] CV not found for deletion, id:', id)
+        throw new NotFoundException('CV not found')
+      }
+      
+      // Delete embeddings from embeddings service
+      try {
+        const embeddingsServiceUrl = this.configService.get<string>('EMBEDDINGS_SERVICE_URL') || 'http://embeddings:4008'
+        await axios.delete(`${embeddingsServiceUrl}/cv/embeddings/${id}`, {
+          timeout: 5000
+        })
+        console.log('[CV MS] embeddings deleted for CV:', id)
+      } catch (embeddingError) {
+        console.error('[CV MS] failed to delete embeddings:', embeddingError.message)
+      }
+      
+      console.log('[CV MS] remove success for id:', id)
+      return { message: 'CV deleted successfully' }
+    } catch (error) {
+      console.error('[CV MS] remove error:', error)
+      if (error instanceof NotFoundException || 
+          error instanceof InternalServerErrorException) {
+        throw error
+      }
+      throw new InternalServerErrorException('An unexpected error occurred while deleting CV')
     }
-    if (!data) {
-      console.error('[CV MS] CV not found for deletion, id:', id)
-      throw new NotFoundException('CV not found')
-    }
-    console.log('[CV MS] remove success for id:', id)
-    return { message: 'CV deleted successfully' }
   }
 
 
 
 
-  private async sendEmail(email: string) {
-  try {
-    console.log(`[CV MS] Sending email to ${email}`)
-
-    const subject = 'CV Received - Thank You for Applying'
-    const textMessage = `Hello,
-
-We have received your CV. Our recruitment team will review your application. If your profile matches an available position, we will contact you.
-
-Thank you for your interest.
-
-Best regards,  
-HR Team`
-
-    const htmlMessage = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #333;">
-        <h2 style="color:#0a6cff;">CV Received</h2>
-        <p>Dear Candidate,</p>
-        <p>We have received your CV. Our recruitment team will carefully review your application. 
-        If your profile matches an available position, we will reach out to you.</p>
-        <p>Thank you for your interest in joining our team.</p>
-        <br>
-        <p style="font-size: 14px; color: #555;">Best regards,<br>HR Team</p>
-      </div>
-    `
-
-    await this.mailer.sendMail(
-      email,
-      subject,
-       textMessage,
-      htmlMessage,
-    )
-
-    console.log(`[CV MS] Email successfully sent to ${email}`)
-  } catch (err) {
-    console.error(`[CV MS] Failed to send email to ${email}:`, err)
-    throw err
-  }
-}
 
 }

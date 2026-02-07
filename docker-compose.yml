@@ -33,6 +33,7 @@ services:
       - fitness
       - scheduler
       - mailer
+      - embeddings
       - rabbitmq
       - bullmq-redis
     networks:
@@ -158,6 +159,24 @@ services:
       - api-gateway
       - rabbitmq
       - bullmq-redis
+    networks:
+      - hygieia-network
+
+  embeddings:
+    build:
+      context: ./embeddings
+      dockerfile: Dockerfile
+      args:
+        PORT: 4008
+    container_name: embeddings
+    ports:
+      - "4008:4008"
+    env_file:
+      - ./embeddings/.env
+    environment:
+      - PORT=4008
+    volumes:
+      - ./embeddings/cvs:/app/cvs
     networks:
       - hygieia-network
 

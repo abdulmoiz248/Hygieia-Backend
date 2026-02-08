@@ -42,7 +42,7 @@ Thumbs.db
 .nx/cache
 .nx/workspace-data
 
-
+__pycache__/
 .env.all
 
 .venv

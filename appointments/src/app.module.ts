@@ -3,7 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { SupabaseModule } from './supabase/supabase.module'
 import { AppointmentsModule } from './appointments/appointments.module'
 import { MongooseModule } from '@nestjs/mongoose'
-import { AnalyticsModule } from './analytics/analytics.module';
+import { AnalyticsModule } from './analytics/analytics.module'
+import { PatientJournalModule } from './patient-journal/patient-journal.module';
 
 
 @Module({
@@ -18,6 +19,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     }),
     SupabaseModule,
     AppointmentsModule,
+    PatientJournalModule,
     AnalyticsModule,
   ],
 })

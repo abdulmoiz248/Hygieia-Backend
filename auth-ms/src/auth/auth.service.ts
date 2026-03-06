@@ -50,6 +50,16 @@ export class AuthService {
     })
   }
 
+  private async sendWorkerDeletionEmail(personalEmail: string, workEmail: string, name: string, role: string) {
+    console.log(`[INFO: AUTH SERVICE] Sending worker deletion email to ${personalEmail}`)
+    this.mailerClient.emit('send-worker-goodbye-email', {
+      personalEmail,
+      workEmail,
+      name,
+      role,
+    })
+  }
+
   async verifyResetOtp(email: string, otp: string) {
     console.log(`[INFO: AUTH SERVICE] Verifying reset OTP for ${email}`)
     
@@ -120,7 +130,7 @@ export class AuthService {
     // Create user in users table
     const { data: userData, error: userError } = await this.supabase.getClient()
       .from('users')
-      .insert([{ email, password_hash: hash, role, is_verified: true }])
+      .insert([{ email, password_hash: hash, role, personal_email: personalEmail, is_verified: true }])
       .select()
       .single()
 
@@ -139,6 +149,7 @@ export class AuthService {
         gender: '',
         dateofbirth: '',
         img: '',
+        personal_email: personalEmail,
         specialization: 'General Medicine',
         experienceYears: 0,
         certifications: [],
@@ -160,6 +171,7 @@ export class AuthService {
         gender: '',
         dateofbirth: '',
         img: '',
+        personal_email: personalEmail,
         specialization: 'General Nutrition',
         experienceYears: 0,
         certifications: [],
@@ -205,6 +217,89 @@ export class AuthService {
       id: userData.id
     }
   }
+
+  async deleteWorker(email: string) {
+    console.log(`[INFO: AUTH SERVICE] Deleting worker with email: ${email}`)
+
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+
+    const client = this.supabase.getClient()
+    const { data: user, error: userFetchError } = await client
+      .from('users')
+      .select('id, email, role, personal_email')
+      .eq('email', email)
+      .single()
+
+    if (userFetchError || !user) {
+      console.error(`[INFO: AUTH SERVICE] Worker not found for email: ${email}`)
+      throw new BadRequestException('Worker not found')
+    }
+
+    if (!['doctor', 'nutritionist', 'lab-technician'].includes(user.role)) {
+      throw new BadRequestException('Provided email does not belong to a worker account')
+    }
+
+    let workerName = user.email
+    let personalEmail = user.personal_email || ''
+
+    if (user.role === 'doctor') {
+      const doctorProfile = await this.doctorModel.findOne({ id: user.id }).lean().exec()
+      if (doctorProfile?.name) workerName = doctorProfile.name
+      if (doctorProfile?.personal_email) personalEmail = doctorProfile.personal_email
+      await this.doctorModel.deleteOne({ id: user.id }).exec()
+    } else if (user.role === 'nutritionist') {
+      const nutritionistProfile = await this.nutModel.findOne({ id: user.id }).lean().exec()
+      if (nutritionistProfile?.name) workerName = nutritionistProfile.name
+      if (nutritionistProfile?.personal_email) personalEmail = nutritionistProfile.personal_email
+      await this.nutModel.deleteOne({ id: user.id }).exec()
+    } else {
+      const { data: labProfile } = await client
+        .from('lab_technician_profiles')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+
+      if (labProfile?.name) workerName = labProfile.name
+
+      const { error: labDeleteError } = await client
+        .from('lab_technician_profiles')
+        .delete()
+        .eq('id', user.id)
+
+      if (labDeleteError) {
+        console.error(`[INFO: AUTH SERVICE] Failed to delete lab technician profile for ${email}: ${labDeleteError.message}`)
+        throw new BadRequestException('Failed to delete worker profile')
+      }
+    }
+
+    const { error: userDeleteError } = await client
+      .from('users')
+      .delete()
+      .eq('id', user.id)
+
+    if (userDeleteError) {
+      console.error(`[INFO: AUTH SERVICE] Failed to delete worker user for ${email}: ${userDeleteError.message}`)
+      throw new BadRequestException('Failed to delete worker user account')
+    }
+
+    if (personalEmail && this.isValidEmail(personalEmail)) {
+      await this.sendWorkerDeletionEmail(personalEmail, user.email, workerName, user.role)
+    } else {
+      console.error(`[INFO: AUTH SERVICE] Missing personal email for deleted worker ${email}, skipping goodbye email`)
+    }
+
+    console.log(`[INFO: AUTH SERVICE] Worker deleted successfully: ${email}`)
+    return {
+      success: true,
+      message: 'Worker deleted successfully and thank-you email sent to personal email',
+      email: user.email,
+      role: user.role,
+      personalEmail,
+    }
+  }
+
   async register(email: string, password: string) {
     console.log(`[INFO: AUTH SERVICE] Registering new user with email: ${email}`)
     
@@ -570,7 +665,7 @@ export class AuthService {
   console.log(`[INFO: AUTH SERVICE] Getting user by role: ${role}, id: ${id}`)
   const { data: user, error: userError } = await this.supabase.getClient()
     .from('users')
-    .select('id, email, role')
+    .select('id, email, role, personal_email')
     .eq('id', id)
     .single()
 

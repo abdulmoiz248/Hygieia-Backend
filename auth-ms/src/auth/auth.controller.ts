@@ -11,6 +11,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto'
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto'
 import { ResetPasswordDto } from './dto/reset-password.dto'
 import { UpsertUserProfileDto } from './dto/upsert-user-profile.dto'
+import { DeleteWorkerDto } from './dto/delete-worker.dto'
 import { createSuccessResponse, createErrorResponse } from './dto/api-response.dto'
 
 @Controller()
@@ -124,6 +125,18 @@ async googleCallback(@Req() req, @Res() res: Response) {
       return createErrorResponse(error.message || 'Worker registration failed', error.detail, error.status || 400)
     }
   }
+
+  @MessagePattern({ cmd: 'delete-worker' })
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async deleteWorkerMs(data: DeleteWorkerDto) {
+    try {
+      const result = await this.auth.deleteWorker(data.email)
+      return createSuccessResponse(result.message, result, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'Worker deletion failed', error.detail, error.status || 400)
+    }
+  }
+
   @MessagePattern({ cmd: 'verify-otp' })
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async verifyOtpMs(data: VerifyOtpDto) {

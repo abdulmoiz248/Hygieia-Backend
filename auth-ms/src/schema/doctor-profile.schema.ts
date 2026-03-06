@@ -26,6 +26,9 @@ export class DoctorProfile {
   img: string
 
   @Prop()
+  personal_email: string
+
+  @Prop()
   specialization: string
 
   @Prop()

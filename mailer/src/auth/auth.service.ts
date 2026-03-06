@@ -3,6 +3,7 @@ import { generateOtpVerificationEmail } from 'src/helpers/generateOtpVerificatio
 import { generatePasswordResetOtpEmail } from 'src/helpers/generatePasswordResetOtpEmail';
 import { generateWelcomeEmail } from 'src/helpers/generateWelcomeEmail';
 import { generateWorkerCredentialsEmail } from 'src/helpers/generateWorkerCredentialsEmail';
+import { generateWorkerGoodbyeEmail } from 'src/helpers/generateWorkerGoodbyeEmail';
 import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
@@ -65,6 +66,28 @@ export class AuthService {
         data.password, 
         data.name, 
         data.role
+      )
+    );
+  }
+
+  /**
+   * Send worker goodbye/thank-you email to personal email
+   */
+  async handleWorkerGoodbyeEmail(data: {
+    personalEmail: string;
+    workEmail: string;
+    name: string;
+    role: string;
+  }) {
+    console.log(`[MAILER SERVICE] Sending worker goodbye email to ${data.personalEmail}`);
+    await this.mailService.sendMail(
+      data.personalEmail,
+      `Thank You for Your Service at Hygieia`,
+      generateWorkerGoodbyeEmail(
+        data.personalEmail,
+        data.name,
+        data.role,
+        data.workEmail
       )
     );
   }

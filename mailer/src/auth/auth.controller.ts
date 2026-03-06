@@ -44,4 +44,17 @@ export class AuthController {
   }) {
     await this.authService.handleWorkerCredentialsEmail(data);
   }
+
+  /**
+   * Handle worker goodbye/thank-you email event
+   */
+  @MessagePattern('send-worker-goodbye-email')
+  async handleWorkerGoodbyeEmail(@Payload() data: {
+    personalEmail: string;
+    workEmail: string;
+    name: string;
+    role: string;
+  }) {
+    await this.authService.handleWorkerGoodbyeEmail(data);
+  }
 }

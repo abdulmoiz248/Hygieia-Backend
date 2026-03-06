@@ -23,6 +23,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto'
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto'
 import { ResetPasswordDto } from './dto/reset-password.dto'
 import { UpsertUserProfileDto } from './dto/upsert-user-profile.dto'
+import { DeleteWorkerDto } from './dto/delete-worker.dto'
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -103,6 +104,40 @@ export class AuthController {
       return await firstValueFrom(this.authClient.send({ cmd: 'register-worker' }, registerWorkerDto))
     } catch (e: any) {
       throw new BadRequestException(e?.message || 'Worker registration failed')
+    }
+  }
+
+  @Post('delete-worker')
+  @ApiOperation({
+    summary: 'Delete healthcare worker',
+    description: 'Delete a healthcare worker account by work email. A thank-you email will be sent to the worker personal email.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Worker deleted successfully',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Worker deleted successfully and thank-you email sent to personal email',
+        data: {
+          success: true,
+          email: 'drsarahjohnson@hygieia.com',
+          role: 'doctor',
+          personalEmail: 'sarah.johnson@gmail.com'
+        },
+        success: true
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - worker not found or invalid email'
+  })
+  async deleteWorker(@Body() deleteWorkerDto: DeleteWorkerDto) {
+    try {
+      return await firstValueFrom(this.authClient.send({ cmd: 'delete-worker' }, deleteWorkerDto))
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Worker deletion failed')
     }
   }
 

@@ -26,6 +26,9 @@ export class NutritionistProfile {
   img: string
 
   @Prop()
+  personal_email: string
+
+  @Prop()
   specialization: string
 
   @Prop()

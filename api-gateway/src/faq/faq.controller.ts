@@ -7,9 +7,7 @@ import {
   Param,
   Delete,
   Inject,
-  Req,
   BadRequestException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
@@ -21,7 +19,7 @@ import { UpdateFaqDto } from './dto/update-faq.dto';
 @Controller('faqs')
 export class FaqController {
   constructor(
-    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
+    @Inject('ADMIN_SERVICE') private readonly adminClient: ClientProxy,
   ) {}
 
   // Public endpoint - no auth required
@@ -62,7 +60,7 @@ export class FaqController {
   async findAll() {
     try {
       return await firstValueFrom(
-        this.authClient.send({ cmd: 'get_all_faqs' }, {}),
+        this.adminClient.send({ cmd: 'get_all_faqs' }, {}),
       );
     } catch (error) {
       throw new BadRequestException('Failed to fetch FAQs');
@@ -120,7 +118,7 @@ export class FaqController {
   async findOne(@Param('id') id: string) {
     try {
       return await firstValueFrom(
-        this.authClient.send({ cmd: 'get_faq_by_id' }, { id }),
+        this.adminClient.send({ cmd: 'get_faq_by_id' }, { id }),
       );
     } catch (error) {
       throw new BadRequestException('Failed to fetch FAQ');
@@ -206,16 +204,12 @@ export class FaqController {
         }
       }
     })
-  async create(@Body() createFaqDto: CreateFaqDto, @Req() req: any) {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      throw new UnauthorizedException('Authentication required');
-    }
+  async create(@Body() body: CreateFaqDto & { userId: string }) {
+    const { userId, ...createFaqDto } = body;
 
     try {
       return await firstValueFrom(
-        this.authClient.send({ cmd: 'create_faq' }, { createFaqDto, userId }),
+        this.adminClient.send({ cmd: 'create_faq' }, { createFaqDto, userId }),
       );
     } catch (error: any) {
       throw new BadRequestException(error?.message || 'Failed to create FAQ');
@@ -324,18 +318,13 @@ export class FaqController {
     })
   async update(
     @Param('id') id: string,
-    @Body() updateFaqDto: UpdateFaqDto,
-    @Req() req: any,
+    @Body() body: UpdateFaqDto & { userId: string },
   ) {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      throw new UnauthorizedException('Authentication required');
-    }
+    const { userId, ...updateFaqDto } = body;
 
     try {
       return await firstValueFrom(
-        this.authClient.send({ cmd: 'update_faq' }, { id, updateFaqDto, userId }),
+        this.adminClient.send({ cmd: 'update_faq' }, { id, updateFaqDto, userId }),
       );
     } catch (error: any) {
       throw new BadRequestException(error?.message || 'Failed to update FAQ');
@@ -408,16 +397,12 @@ export class FaqController {
         }
       }
     })
-  async remove(@Param('id') id: string, @Req() req: any) {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      throw new UnauthorizedException('Authentication required');
-    }
+  async remove(@Param('id') id: string, @Body() body: { userId: string }) {
+    const { userId } = body;
 
     try {
       return await firstValueFrom(
-        this.authClient.send({ cmd: 'delete_faq' }, { id, userId }),
+        this.adminClient.send({ cmd: 'delete_faq' }, { id, userId }),
       );
     } catch (error: any) {
       throw new BadRequestException(error?.message || 'Failed to delete FAQ');

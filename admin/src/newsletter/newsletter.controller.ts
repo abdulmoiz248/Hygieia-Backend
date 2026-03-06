@@ -3,6 +3,7 @@ import { MessagePattern } from '@nestjs/microservices';
 import { NewsletterService } from './newsletter.service';
 import { GenerateNewsletterHtmlDto } from './dto/generate-newsletter-html.dto';
 import { SendNewsletterDto } from './dto/send-newsletter.dto';
+import { SendBlogpostNewsletterDto } from './dto/send-blogpost-newsletter.dto';
 
 @Controller('newsletter')
 export class NewsletterController {
@@ -28,6 +29,18 @@ export class NewsletterController {
     return {
       data: result,
       message: 'Newsletter send request processed',
+    };
+  }
+
+  @MessagePattern({ cmd: 'send_blogpost_newsletter' })
+  async sendBlogpostNewsletter(payload: SendBlogpostNewsletterDto) {
+    const result = await this.newsletterService.sendBlogpostAsNewsletter(
+      payload.blogpostId,
+    );
+
+    return {
+      data: result,
+      message: 'Blogpost newsletter sent successfully',
     };
   }
 }

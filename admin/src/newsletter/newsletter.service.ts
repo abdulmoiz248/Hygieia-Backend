@@ -139,6 +139,137 @@ Design requirements:
     return fallback.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
 
+  async sendBlogpostAsNewsletter(blogpostId: string) {
+    if (!blogpostId?.trim()) {
+      throw new BadRequestException('Blogpost ID is required');
+    }
+
+    // Fetch the blogpost
+    const { data: blogpost, error } = await this.supabaseService
+      .getClient()
+      .from('blogpost')
+      .select('*')
+      .eq('id', blogpostId)
+      .single();
+
+    if (error || !blogpost) {
+      throw new BadRequestException('Blogpost not found');
+    }
+
+    // Generate newsletter HTML from blogpost content
+    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+    if (!apiKey) {
+      throw new InternalServerErrorException('GEMINI_API_KEY is not configured');
+    }
+
+    const model = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash';
+    const client = new GoogleGenAI({ apiKey });
+
+    const prompt = `Convert this blog post into a production-ready responsive HTML email newsletter.
+Return ONLY raw HTML (no markdown, no code fences, no explanation).
+
+Blog Post Details:
+Title: ${blogpost.title}
+Author: ${blogpost.author || 'Hygieia Team'}
+Excerpt: ${blogpost.excerpt || ''}
+Category: ${blogpost.category || ''}
+Tags: ${blogpost.tags?.join(', ') || ''}
+Read Time: ${blogpost.readTime || ''} minutes
+Content (in markdown):
+${blogpost.content}
+
+Design requirements:
+- Must be email-client friendly and responsive for mobile using table-based layout and inline CSS.
+- Must include viewport meta and semantic email sections (header, hero, body, CTA, footer).
+- Keep width centered, max width around 600px.
+- Use these colors only:
+  - #008396 (soft blue)
+  - #46bba5 (mint green)
+  - #ff1c6c (soft coral)
+  - #fbf9ea (snow white)
+  - #001016 (dark slate gray)
+  - #17433b (cool gray)
+- Ensure good text contrast and accessible font sizing.
+- Convert the markdown content properly to HTML with proper formatting.
+- Include the blog title as a prominent heading.
+- Show author, category, tags, and read time in metadata section.
+- Include a clear CTA button that links to the full blog post at: https://hygieia-frontend.vercel.app/blogs/${blogpostId}
+- Include a footer note. Today's date is ${new Date().toLocaleDateString()} and our website is hygieia-frontend.vercel.app with blogs at /blogs.
+- Make it visually appealing and professional.
+`;
+
+    let html: string;
+    try {
+      const response = await client.models.generateContent({
+        model,
+        contents: prompt,
+      });
+
+      const generated = this.extractText(response)?.trim();
+      if (!generated || !generated.includes('<html')) {
+        throw new InternalServerErrorException(
+          'Failed to generate valid newsletter HTML from blogpost',
+        );
+      }
+
+      html = this.stripCodeFence(generated);
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Newsletter generation from blogpost failed');
+    }
+
+    // Send newsletter to all subscribers
+    const { data: subscribers, error: subscribersError } = await this.supabaseService
+      .getClient()
+      .from('newsletter')
+      .select('email');
+
+    if (subscribersError) {
+      throw new InternalServerErrorException('Failed to fetch newsletter subscribers');
+    }
+
+    const emails = (subscribers || [])
+      .map((row) => row.email)
+      .filter((email): email is string => Boolean(email));
+
+    if (!emails.length) {
+      return {
+        success: false,
+        message: 'No newsletter subscribers found',
+        recipientCount: 0,
+        blogpost: {
+          id: blogpost.id,
+          title: blogpost.title,
+        },
+      };
+    }
+
+    const subject = `${blogpost.title} - Hygieia Blog`;
+
+    const mailerResult = await firstValueFrom(
+      this.mailerClient.send(
+        { cmd: 'send-newsletter-bulk' },
+        {
+          emails,
+          html,
+          subject,
+        },
+      ),
+    );
+
+    return {
+      ...mailerResult,
+      recipientCount: emails.length,
+      blogpost: {
+        id: blogpost.id,
+        title: blogpost.title,
+        category: blogpost.category,
+      },
+    };
+  }
+
   private stripCodeFence(value: string): string {
     return value.replace(/^```html\s*/i, '').replace(/```$/i, '').trim();
   }

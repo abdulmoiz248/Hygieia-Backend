@@ -11,6 +11,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SubscribeNewsletterDto } from './dto/subscribeNewsletter.dto';
 import { GenerateNewsletterHtmlDto } from './dto/generate-newsletter-html.dto';
 import { SendNewsletterDto } from './dto/send-newsletter.dto';
+import { SendBlogpostNewsletterDto } from './dto/send-blogpost-newsletter.dto';
 import { firstValueFrom } from 'rxjs';
 
 @ApiTags('Newsletter')
@@ -184,6 +185,76 @@ export class NewsletterController {
         throw e;
       }
       throw new BadRequestException(e?.message || 'Newsletter send failed');
+    }
+  }
+
+  @Post('send-blogpost-newsletter')
+  @ApiOperation({ 
+    summary: 'Send blog post as newsletter (Admin only)',
+    description: 'Converts a blog post to newsletter format using AI and sends to all subscribers. Requires admin role.'
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Blog post newsletter sent successfully',
+    schema: {
+      example: {
+        statusCode: 201,
+        message: 'Blogpost newsletter sent successfully',
+        data: {
+          success: true,
+          sentCount: 150,
+          failedCount: 0,
+          recipientCount: 150,
+          blogpost: {
+            id: '9a5d2f1a-9bc7-4c52-8214-1f03e11faa01',
+            title: 'Why Modern Healthcare Needs AI More Than Ever',
+            category: 'Technology'
+          },
+          message: 'Newsletter sent to all recipients'
+        },
+        success: true
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - user is not an admin',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Only admins can send blogpost newsletters',
+        success: false
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - blogpost not found or send failed',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Blogpost not found',
+        success: false
+      }
+    }
+  })
+  async sendBlogpostNewsletter(@Body() dto: SendBlogpostNewsletterDto) {
+    try {
+      // Verify user is admin
+      await this.verifyAdmin(dto.userId);
+
+      // Send blogpost as newsletter via admin service
+      return await firstValueFrom(
+        this.adminClient.send(
+          { cmd: 'send_blogpost_newsletter' },
+          { blogpostId: dto.blogpostId }
+        )
+      );
+    } catch (e: any) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
+      throw new BadRequestException(e?.message || 'Blogpost newsletter send failed');
     }
   }
 

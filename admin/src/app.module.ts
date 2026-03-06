@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { FaqModule } from './faq/faq.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
+import { BlogpostModule } from './blogpost/blogpost.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
     SupabaseModule,
     FaqModule,
     NewsletterModule,
+    BlogpostModule,
   ],
   controllers: [AppController],
   providers: [AppService],

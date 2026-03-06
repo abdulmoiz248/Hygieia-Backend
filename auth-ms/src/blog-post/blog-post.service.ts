@@ -32,12 +32,12 @@ export class BlogPostService {
 
   async findAll() {
     console.log('📌 Fetching all blog posts...')
-    const { data, error } = await this.supabase.from('blogpost').select('*')
+    const { data, error } = await this.supabase.from('blogpost').select('*').eq('verified', true);
     if (error) {
       console.error('❌ Error fetching blog posts:', error)
       return { success: false, error }
     }
-    console.log('✅ Found blog posts:', data)
+    console.log('✅ Found blog posts')
     return { success: true, data }
   }
 

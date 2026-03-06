@@ -1,20 +1,209 @@
-import { Controller, Inject, Post ,Body} from '@nestjs/common';
+import { 
+  Controller, 
+  Inject, 
+  Post, 
+  Body, 
+  UnauthorizedException,
+  BadRequestException 
+} from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices/client/client-proxy';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SubscribeNewsletterDto } from './dto/subscribeNewsletter.dto';
+import { GenerateNewsletterHtmlDto } from './dto/generate-newsletter-html.dto';
+import { SendNewsletterDto } from './dto/send-newsletter.dto';
 import { firstValueFrom } from 'rxjs';
 
+@ApiTags('Newsletter')
 @Controller()
 export class NewsletterController {
-   constructor(@Inject('AUTH_SERVICE') private authClient: ClientProxy) {}
-  
+  constructor(
+    @Inject('AUTH_SERVICE') private authClient: ClientProxy,
+    @Inject('ADMIN_SERVICE') private adminClient: ClientProxy,
+  ) {}
+
   @Post('subscribe-newsletter')
+  @ApiOperation({ 
+    summary: 'Subscribe to newsletter',
+    description: 'Subscribe user email to the newsletter mailing list.'
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Successfully subscribed to newsletter',
+    schema: {
+      example: {
+        statusCode: 201,
+        message: 'Subscribed successfully',
+        success: true
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - email already subscribed or validation error',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Email already subscribed',
+        success: false
+      }
+    }
+  })
   async subscribe(@Body() dto: SubscribeNewsletterDto) {
+    try {
       return await firstValueFrom(
-          this.authClient.send(
-            { cmd: 'subscribe-newsletter' },
-            dto
-          )
+        this.authClient.send(
+          { cmd: 'subscribe-newsletter' },
+          dto
         )
+      );
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Newsletter subscription failed');
+    }
   }
 
+  @Post('generate-newsletter-html')
+  @ApiOperation({ 
+    summary: 'Generate newsletter HTML (Admin only)',
+    description: 'Generate responsive HTML newsletter content using AI based on provided idea. Requires admin role.'
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Newsletter HTML generated successfully',
+    schema: {
+      example: {
+        statusCode: 201,
+        message: 'Newsletter HTML generated successfully',
+        data: {
+          html: '<html>...</html>'
+        },
+        success: true
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - user is not an admin',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Only admins can generate newsletters',
+        success: false
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - validation error or generation failed',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Newsletter idea is required',
+        success: false
+      }
+    }
+  })
+  async generateNewsletterHtml(@Body() dto: GenerateNewsletterHtmlDto) {
+    try {
+      // Verify user is admin
+      await this.verifyAdmin(dto.userId);
+
+      // Generate newsletter HTML via admin service
+      return await firstValueFrom(
+        this.adminClient.send(
+          { cmd: 'generate_newsletter_html' },
+          { idea: dto.idea }
+        )
+      );
+    } catch (e: any) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
+      throw new BadRequestException(e?.message || 'Newsletter generation failed');
+    }
+  }
+
+  @Post('send-newsletter')
+  @ApiOperation({ 
+    summary: 'Send newsletter to all subscribers (Admin only)',
+    description: 'Send newsletter HTML to all subscribed users. Requires admin role.'
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Newsletter sent successfully',
+    schema: {
+      example: {
+        statusCode: 201,
+        message: 'Newsletter send request processed',
+        data: {
+          success: true,
+          sentCount: 150,
+          failedCount: 0,
+          recipientCount: 150,
+          message: 'Newsletter sent to all recipients'
+        },
+        success: true
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - user is not an admin',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Only admins can send newsletters',
+        success: false
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - validation error or send failed',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Newsletter HTML is required',
+        success: false
+      }
+    }
+  })
+  async sendNewsletter(@Body() dto: SendNewsletterDto) {
+    try {
+      // Verify user is admin
+      await this.verifyAdmin(dto.userId);
+
+      // Send newsletter via admin service
+      return await firstValueFrom(
+        this.adminClient.send(
+          { cmd: 'send_newsletter' },
+          { html: dto.html, subject: dto.subject }
+        )
+      );
+    } catch (e: any) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
+      throw new BadRequestException(e?.message || 'Newsletter send failed');
+    }
+  }
+
+  private async verifyAdmin(userId: string): Promise<void> {
+    try {
+      const userResult = await firstValueFrom(
+        this.authClient.send(
+          { cmd: 'user-data' },
+          { id: userId, role: 'admin' }
+        )
+      );
+
+      if (!userResult?.data?.role || userResult.data.role !== 'admin') {
+        throw new UnauthorizedException('Only admins can perform this action');
+      }
+    } catch (e: any) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
+      throw new UnauthorizedException('Only admins can perform this action');
+    }
+  }
 }

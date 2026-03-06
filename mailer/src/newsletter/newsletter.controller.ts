@@ -11,4 +11,11 @@ export class NewsletterController {
   async handleWelcomeNewsletterEmail(@Payload() data) {
      await this.newsletterService.handleWelcomeNewsletterEmail(data)
     }
+
+  @MessagePattern({ cmd: 'send-newsletter-bulk' })
+  async handleSendNewsletterBulk(
+    @Payload() data: { emails: string[]; html: string; subject?: string },
+  ) {
+    return this.newsletterService.handleSendNewsletterBulk(data);
+  }
 }

@@ -4,9 +4,15 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { FaqModule } from './faq/faq.module';
 import { SupabaseModule } from './supabase/supabase.module';
+import { NewsletterModule } from './newsletter/newsletter.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), SupabaseModule, FaqModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    SupabaseModule,
+    FaqModule,
+    NewsletterModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

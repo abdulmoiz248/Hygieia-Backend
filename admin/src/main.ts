@@ -17,12 +17,7 @@ async function bootstrap() {
   // Start listening for microservice messages
   await app.startAllMicroservices();
 
-  // Listen on HTTP port for health checks and other endpoints
-  const httpPort = process.env.PORT ?? 4011;
-  await app.listen(httpPort, () => {
-    console.log(`Admin microservice listening on port ${httpPort}`);
-    console.log(`Admin microservice TCP listening on port ${process.env.ADMIN_MS_PORT ? parseInt(process.env.ADMIN_MS_PORT) : 4011}`);
-  });
+  
 }
 
 bootstrap();

@@ -1,12 +1,13 @@
-# CV Embeddings Service
+# CV Embeddings and RAG Service
 
-A FastAPI microservice for generating and managing CV embeddings using FAISS and Sentence Transformers.
+A FastAPI microservice for generating and managing CV embeddings using FAISS and Sentence Transformers, with Groq-powered RAG for question answering.
 
 ## Features
 
 - Generate embeddings from CV PDFs using sentence transformers
 - Store embeddings locally using FAISS vector database
 - Semantic search for similar CVs
+- RAG endpoint that retrieves relevant CV chunks and generates grounded answers with Groq
 - RESTful API for managing embeddings
 
 ## API Endpoints
@@ -15,6 +16,7 @@ A FastAPI microservice for generating and managing CV embeddings using FAISS and
 - `GET /` - Health check
 - `GET /cv/health` - Detailed health check with stats
 - `GET /cv/stats` - Get service statistics
+- `GET /rag/health` - RAG readiness check (vectors + Groq key)
 
 ### Embeddings Management
 - `POST /cv/generate-embeddings` - Generate embeddings for a CV
@@ -24,6 +26,9 @@ A FastAPI microservice for generating and managing CV embeddings using FAISS and
 
 ### Search
 - `POST /cv/search` - Search for similar CVs using semantic search
+
+### RAG
+- `POST /rag/ask` - Ask a question over indexed CV knowledge using retrieval + Groq
 
 ## Setup
 
@@ -40,6 +45,15 @@ python main.py
 ```
 
 The service will start on port 4008 (or the port specified in PORT environment variable).
+
+### Required Environment Variables
+
+- `GROQ_API_KEY` - Groq API key for generation
+- `GROQ_MODEL` - Optional model override (default `llama-3.1-8b-instant`)
+- `RAG_MAX_CONTEXT_CHARS` - Maximum context payload passed to LLM
+- `RAG_MAX_QUESTION_CHARS` - Maximum question length accepted by RAG endpoint
+- `RAG_MAX_TOP_K` - Maximum retrieval top-k allowed per request
+- `EMBEDDINGS_DATA_DIR` - Optional absolute/relative path where `faiss.index` and `metadata.json` are stored
 
 ### Docker
 

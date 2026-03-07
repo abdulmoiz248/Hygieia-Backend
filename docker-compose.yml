@@ -26,6 +26,7 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=bullmq-redis
       - API_GATEWAY_HOST=api-gateway
+      - EMBEDDINGS_SERVICE_URL=http://embeddings:4008
     depends_on:
       - auth-ms
       - appointments

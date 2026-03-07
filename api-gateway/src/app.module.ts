@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -19,9 +20,34 @@ import { NewsletterModule } from './newsletter/newsletter.module';
 import { DoctorsModule } from './doctors/doctors.module';
 import { PatientJournalModule } from './patient-journal/patient-journal.module';
 import { FaqModule } from './faq/faq.module';
+import { RagModule } from './rag/rag.module';
 
 @Module({
-  imports: [AuthModule, BookingsModule, LabTestsModule, MedicalRecordsModule, FitnessModule, AppointmentsModule, PatientJournalModule, AnalyticsModule, DietPlanModule, CvModule, BlogPostModule, BlogCategoryModule, NutritionistsModule, WorkoutSessionsModule, NotificationsModule, NewsletterModule, DoctorsModule, FaqModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env', '.env.local', '../.env'],
+    }),
+    AuthModule,
+    BookingsModule,
+    LabTestsModule,
+    MedicalRecordsModule,
+    FitnessModule,
+    AppointmentsModule,
+    PatientJournalModule,
+    AnalyticsModule,
+    DietPlanModule,
+    CvModule,
+    BlogPostModule,
+    BlogCategoryModule,
+    NutritionistsModule,
+    WorkoutSessionsModule,
+    NotificationsModule,
+    NewsletterModule,
+    DoctorsModule,
+    FaqModule,
+    RagModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

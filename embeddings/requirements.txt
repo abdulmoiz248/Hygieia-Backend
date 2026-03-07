@@ -8,3 +8,4 @@ numpy==1.26.4
 requests==2.32.3
 PyPDF2==3.0.1
 python-multipart==0.0.12
+groq==0.18.0

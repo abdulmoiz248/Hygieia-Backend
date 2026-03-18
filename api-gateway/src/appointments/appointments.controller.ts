@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common'
 import { ClientProxy } from '@nestjs/microservices'
 import { CreateAppointmentDto } from './dto/create-appointment.dto'
 import { UpdateAppointmentDto } from './dto/update-appointment.dto'
@@ -8,6 +8,8 @@ import { CompleteDoctorAppointmentDto } from './dto/complete-doctor-appointment.
 import { firstValueFrom } from 'rxjs'
 import { AvailableSlotsQueryDto } from './dto/available-slots.dto'
 import { CancelAppointmentDto } from './dto/cancel-appointment.dto'
+import { MedicationTakenDto } from './dto/medication-taken.dto'
+import { MedicationLogsQueryDto } from './dto/medication-logs-query.dto'
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 
 @ApiTags('Appointments')
@@ -222,6 +224,59 @@ async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
     @Param('patientId') patientId: string,
   ) {
     return this.client.send({ cmd: 'get_previous_prescriptions' }, { doctorId, patientId })
+  }
+
+  @Post('prescriptions/medications/taken')
+  @ApiOperation({
+    summary: 'Save medication taken/un-taken event',
+    description: 'Persists patient medicine adherence action and upserts latest action per medication per day.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['patientId', 'prescriptionId', 'medicationId', 'taken', 'takenAt'],
+      properties: {
+        patientId: { type: 'string', format: 'uuid' },
+        prescriptionId: { type: 'string', format: 'uuid' },
+        medicationId: { type: 'string', example: 'med-1' },
+        taken: { type: 'boolean' },
+        takenAt: { type: 'string', format: 'date-time' },
+        scheduledTime: { type: 'string', example: '08:00 AM' },
+        source: { type: 'string', example: 'patient-web' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Medication status saved' })
+  @ApiResponse({ status: 400, description: 'Invalid payload' })
+  @ApiResponse({ status: 404, description: 'Prescription or medication not found for patient' })
+  async saveMedicationTaken(@Body() body: MedicationTakenDto) {
+    try {
+      return await firstValueFrom(this.client.send({ cmd: 'save_medication_taken' }, body))
+    } catch (e: any) {
+      const msg = e?.message || e?.error || 'Failed to save medication status'
+      if (typeof msg === 'string' && msg.toLowerCase().includes('not found')) {
+        throw new NotFoundException(msg)
+      }
+      throw new BadRequestException(msg)
+    }
+  }
+
+  @Get('prescriptions/medications/logs')
+  @ApiOperation({
+    summary: 'Get medication adherence logs',
+    description: 'Returns medication taken logs for a patient with optional date range filters.',
+  })
+  @ApiQuery({ name: 'patientId', required: true, description: 'Patient user ID (UUID)' })
+  @ApiQuery({ name: 'from', required: false, description: 'Start date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'to', required: false, description: 'End date (YYYY-MM-DD)' })
+  @ApiResponse({ status: 200, description: 'Medication logs fetched successfully' })
+  async getMedicationLogs(@Query() query: MedicationLogsQueryDto) {
+    try {
+      return await firstValueFrom(this.client.send({ cmd: 'get_medication_logs' }, query))
+    } catch (e: any) {
+      const msg = e?.message || e?.error || 'Failed to fetch medication logs'
+      throw new BadRequestException(msg)
+    }
   }
 
   @Patch(':id/cancel')

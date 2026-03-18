@@ -7,6 +7,7 @@ import { AppointmentMode, AppointmentStatus, AppointmentTypes } from './appointm
 import { InjectModel } from '@nestjs/mongoose'
 import { Profile, ProfileDocument } from './schema/patient.profile.schema'
 import { Model } from 'mongoose'
+import { randomUUID } from 'crypto'
 import { CompleteNutritionistAppointmentDto } from './dto/complete-nutritionist-appointment.dto'
 import { CompleteDoctorAppointmentDto } from './dto/complete-doctor-appointment.dto'
 import { NutritionistProfile, NutritionistProfileDocument } from './schema/nutritionist-profile.schema'
@@ -18,6 +19,8 @@ import { AppointmentMQDto } from './dto/appointmentMQ.dto'
 import { AppointmentCancellationDto } from './dto/appointment-cancellation.dto'
 import { AppointmentUpdateDto } from './dto/appointment-update.dto'
 import { CancelAppointmentDto, CancellationReason } from './dto/cancel-appointment.dto'
+import { MedicationTakenDto } from './dto/medication-taken.dto'
+import { MedicationLogsQueryDto } from './dto/medication-logs-query.dto'
 
 type DbRow = {
   id: string
@@ -85,6 +88,7 @@ type AppointmentWithDietPlan ={
 }
 
 type PrescriptionMedication = {
+  id?: string
   name: string
   dosage: string
   frequency: string
@@ -103,6 +107,19 @@ type PrescriptionRow = {
   start_date: string | null
   end_date: string | null
   status: 'active' | 'completed'
+  created_at: string
+  updated_at: string
+}
+
+type MedicationAdherenceRow = {
+  id: string
+  patient_id: string
+  prescription_id: string
+  medication_id: string
+  taken: boolean
+  taken_at: string
+  scheduled_time: string | null
+  source: string | null
   created_at: string
   updated_at: string
 }
@@ -176,6 +193,13 @@ export class AppointmentsService {
     }
 
     return resolved
+  }
+
+  private normalizePrescriptionMedications(medications: PrescriptionMedication[]): PrescriptionMedication[] {
+    return (medications || []).map((medication) => ({
+      ...medication,
+      id: medication?.id || randomUUID(),
+    }))
   }
 
   async create(dto: CreateAppointmentDto): Promise<ApiRow> {
@@ -896,6 +920,7 @@ async completeDoctorAppointment(
 
   if (dto.prescription?.medications?.length) {
     const status = dto.prescription.status ?? 'active'
+    const normalizedMedications = this.normalizePrescriptionMedications(dto.prescription.medications)
 
     const prescriptionInsert = await this.supabase
       .from('prescriptions')
@@ -903,7 +928,7 @@ async completeDoctorAppointment(
         appointment_id: appt.id,
         patient_id: appt.patient_id,
         doctor_id: doctorId,
-        medications: dto.prescription.medications,
+        medications: normalizedMedications,
         notes: dto.prescription.notes ?? null,
         start_date: dto.prescription.startDate ?? null,
         end_date: dto.prescription.endDate ?? null,
@@ -1039,7 +1064,9 @@ async updatePrescription(
     updated_at: new Date().toISOString(),
   }
 
-  if (payload.medications !== undefined) updates.medications = payload.medications
+  if (payload.medications !== undefined) {
+    updates.medications = this.normalizePrescriptionMedications(payload.medications)
+  }
   if (payload.notes !== undefined) updates.notes = payload.notes
   if (payload.startDate !== undefined) updates.start_date = payload.startDate
   if (payload.endDate !== undefined) updates.end_date = payload.endDate
@@ -1088,6 +1115,167 @@ async getPreviousPrescriptionsForPatient(doctorId: string, patientId: string) {
 
   this.logger(`FETCHED ${result.length} PREVIOUS PRESCRIPTION(S) FOR PATIENT=${patientId}`)
   return result
+}
+
+async saveMedicationTaken(payload: MedicationTakenDto) {
+  this.logger(
+    `SAVE MEDICATION TAKEN CALLED patient=${payload.patientId} prescription=${payload.prescriptionId} medication=${payload.medicationId}`,
+  )
+
+  if (!payload.patientId || !payload.prescriptionId || !payload.medicationId) {
+    throw new BadRequestException('patientId, prescriptionId and medicationId are required')
+  }
+
+  const takenAtDate = new Date(payload.takenAt)
+  if (Number.isNaN(takenAtDate.getTime())) {
+    throw new BadRequestException('Invalid takenAt timestamp')
+  }
+
+  const { data: prescription, error: prescriptionError } = await this.supabase
+    .from('prescriptions')
+    .select('*')
+    .eq('id', payload.prescriptionId)
+    .eq('patient_id', payload.patientId)
+    .single()
+
+  if (prescriptionError?.message?.includes('No rows')) {
+    throw new NotFoundException('Prescription not found for patient')
+  }
+  if (prescriptionError) {
+    throw new BadRequestException(prescriptionError.message)
+  }
+
+  const prescriptionRow = prescription as PrescriptionRow
+  const medications = Array.isArray(prescriptionRow.medications) ? prescriptionRow.medications : []
+
+  const medicationExists = medications.some((med: any) => {
+    if (!med) return false
+    const idCandidates = [med.id, med.medicationId, med.medication_id, med.name]
+      .filter(Boolean)
+      .map((value: any) => value.toString())
+    return idCandidates.includes(payload.medicationId)
+  })
+
+  if (!medicationExists) {
+    throw new NotFoundException('Medication not found in prescription')
+  }
+
+  const dateKey = takenAtDate.toISOString().split('T')[0]
+  const dayStartIso = `${dateKey}T00:00:00.000Z`
+  const dayEnd = new Date(`${dateKey}T00:00:00.000Z`)
+  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1)
+  const dayEndIso = dayEnd.toISOString()
+
+  const { data: existingLogs, error: existingError } = await this.supabase
+    .from('medication_adherence_logs')
+    .select('*')
+    .eq('patient_id', payload.patientId)
+    .eq('prescription_id', payload.prescriptionId)
+    .eq('medication_id', payload.medicationId)
+    .gte('taken_at', dayStartIso)
+    .lt('taken_at', dayEndIso)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+
+  if (existingError) {
+    throw new BadRequestException(existingError.message)
+  }
+
+  const upsertPayload = {
+    patient_id: payload.patientId,
+    prescription_id: payload.prescriptionId,
+    medication_id: payload.medicationId,
+    taken: payload.taken,
+    taken_at: takenAtDate.toISOString(),
+    scheduled_time: payload.scheduledTime ?? null,
+    source: payload.source ?? 'patient-web',
+    updated_at: new Date().toISOString(),
+  }
+
+  let saved: MedicationAdherenceRow
+
+  if (existingLogs && existingLogs.length > 0) {
+    const { data: updated, error: updateError } = await this.supabase
+      .from('medication_adherence_logs')
+      .update(upsertPayload)
+      .eq('id', existingLogs[0].id)
+      .select('*')
+      .single()
+
+    if (updateError) throw new BadRequestException(updateError.message)
+    saved = updated as MedicationAdherenceRow
+  } else {
+    const { data: inserted, error: insertError } = await this.supabase
+      .from('medication_adherence_logs')
+      .insert(upsertPayload)
+      .select('*')
+      .single()
+
+    if (insertError) throw new BadRequestException(insertError.message)
+    saved = inserted as MedicationAdherenceRow
+  }
+
+  return {
+    success: true,
+    message: 'Medication status saved',
+    data: {
+      id: saved.id,
+      patientId: saved.patient_id,
+      prescriptionId: saved.prescription_id,
+      medicationId: saved.medication_id,
+      taken: saved.taken,
+      takenAt: saved.taken_at,
+      scheduledTime: saved.scheduled_time,
+      date: dateKey,
+    },
+  }
+}
+
+async getMedicationLogs(query: MedicationLogsQueryDto) {
+  this.logger(`GET MEDICATION LOGS CALLED FOR PATIENT=${query.patientId}`)
+
+  if (!query.patientId) {
+    throw new BadRequestException('patientId is required')
+  }
+
+  let dbQuery = this.supabase
+    .from('medication_adherence_logs')
+    .select('*')
+    .eq('patient_id', query.patientId)
+    .order('taken_at', { ascending: false })
+
+  if (query.from) {
+    dbQuery = dbQuery.gte('taken_at', `${query.from}T00:00:00.000Z`)
+  }
+
+  if (query.to) {
+    const toDate = new Date(`${query.to}T00:00:00.000Z`)
+    toDate.setUTCDate(toDate.getUTCDate() + 1)
+    dbQuery = dbQuery.lt('taken_at', toDate.toISOString())
+  }
+
+  const { data, error } = await dbQuery
+
+  if (error) throw new BadRequestException(error.message)
+
+  const logs = ((data as MedicationAdherenceRow[]) || []).map((row) => ({
+    id: row.id,
+    patientId: row.patient_id,
+    prescriptionId: row.prescription_id,
+    medicationId: row.medication_id,
+    taken: row.taken,
+    takenAt: row.taken_at,
+    scheduledTime: row.scheduled_time,
+    date: row.taken_at ? row.taken_at.split('T')[0] : null,
+    source: row.source,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }))
+
+  return {
+    success: true,
+    data: logs,
+  }
 }
 
 

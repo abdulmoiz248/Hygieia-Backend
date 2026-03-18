@@ -4,10 +4,11 @@ import { AppointmentsService } from './appointments.service'
 import { CreateAppointmentDto } from './dto/create-appointment.dto'
 import { UpdateAppointmentDto } from './dto/update-appointment.dto'
 import { CompleteNutritionistAppointmentDto } from './dto/complete-nutritionist-appointment.dto'
-import { CompleteDoctorAppointmentDto } from './dto/complete-doctor-appointment.dto'
 import { AppointmentMode, AppointmentStatus, AppointmentTypes } from './appointment.enums'
 import { AvailableSlotsQueryDto } from './dto/available-slots.dto'
 import { CancelAppointmentDto } from './dto/cancel-appointment.dto'
+import { MedicationTakenDto } from './dto/medication-taken.dto'
+import { MedicationLogsQueryDto } from './dto/medication-logs-query.dto'
 
 @Controller()
 export class AppointmentsController {
@@ -109,7 +110,7 @@ getAvailableSlots(@Payload() payload:AvailableSlotsQueryDto) {
   @MessagePattern({ cmd: 'complete_doctor_appointment' })
   completeDoctorAppointment(
     @Payload()
-    payload: { id: string; dto: CompleteDoctorAppointmentDto; doctorId: string },
+    payload: { id: string; dto: any; doctorId: string },
   ) {
     return this.svc.completeDoctorAppointment(payload.id, payload.dto, payload.doctorId)
   }
@@ -132,6 +133,16 @@ getAvailableSlots(@Payload() payload:AvailableSlotsQueryDto) {
   @MessagePattern({ cmd: 'get_previous_prescriptions' })
   getPreviousPrescriptions(@Payload() payload: { doctorId: string; patientId: string }) {
     return this.svc.getPreviousPrescriptionsForPatient(payload.doctorId, payload.patientId)
+  }
+
+  @MessagePattern({ cmd: 'save_medication_taken' })
+  saveMedicationTaken(@Payload() payload: MedicationTakenDto) {
+    return this.svc.saveMedicationTaken(payload)
+  }
+
+  @MessagePattern({ cmd: 'get_medication_logs' })
+  getMedicationLogs(@Payload() payload: MedicationLogsQueryDto) {
+    return this.svc.getMedicationLogs(payload)
   }
 
 

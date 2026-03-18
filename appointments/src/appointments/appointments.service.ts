@@ -8,6 +8,7 @@ import { InjectModel } from '@nestjs/mongoose'
 import { Profile, ProfileDocument } from './schema/patient.profile.schema'
 import { Model } from 'mongoose'
 import { CompleteNutritionistAppointmentDto } from './dto/complete-nutritionist-appointment.dto'
+import { CompleteDoctorAppointmentDto } from './dto/complete-doctor-appointment.dto'
 import { NutritionistProfile, NutritionistProfileDocument } from './schema/nutritionist-profile.schema'
 import { DoctorProfile, DoctorProfileDocument } from './schema/doctor-profile.schema'
 import { MailerService } from '../mailer/mailer.service'
@@ -81,6 +82,29 @@ type AppointmentWithDietPlan ={
     end_date?: string
     created_at: string
   }[]
+}
+
+type PrescriptionMedication = {
+  name: string
+  dosage: string
+  frequency: string
+  duration: string
+  instructions?: string
+  time?: string
+}
+
+type PrescriptionRow = {
+  id: string
+  appointment_id: string
+  patient_id: string
+  doctor_id: string
+  medications: PrescriptionMedication[]
+  notes: string | null
+  start_date: string | null
+  end_date: string | null
+  status: 'active' | 'completed'
+  created_at: string
+  updated_at: string
 }
 
 @Injectable()
@@ -833,6 +857,237 @@ async completeNutritionistAppointment(
   this.logger("APPOINTMENT STATUS UPDATED AND LINKED TO DIET PLAN (IF ANY)")
 
   return this.toApi(updated as DbRow)
+}
+
+async completeDoctorAppointment(
+  id: string,
+  dto: CompleteDoctorAppointmentDto,
+  doctorId: string,
+): Promise<ApiRow> {
+  this.logger('COMPLETE DOCTOR APPOINTMENT CALLED FOR DOCTOR ID=' + doctorId)
+
+  const { data: appointment, error } = await this.supabase
+    .from('appointments')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error?.message?.includes('No rows')) throw new NotFoundException('appointment not found')
+  if (error) throw new BadRequestException(error.message)
+
+  const appt = appointment as DbRow
+  let prescriptionId: string | null = null
+
+  if (appt.doctor_id !== doctorId) {
+    throw new ForbiddenException('You are not authorized to complete this appointment')
+  }
+
+  const tasks: Promise<any>[] = []
+
+  if (dto.referredTestIds?.length) {
+    const inserts = dto.referredTestIds.map(testId => ({
+      test_id: testId,
+      patient_id: appt.patient_id,
+      referrer_id: doctorId,
+    }))
+    this.logger('DOCTOR REFERRED TOTAL ' + inserts.length + ' TEST(s)')
+    tasks.push(this.supabase.from('referred_tests').insert(inserts).then(r => r) as any)
+  }
+
+  if (dto.prescription?.medications?.length) {
+    const status = dto.prescription.status ?? 'active'
+
+    const prescriptionInsert = await this.supabase
+      .from('prescriptions')
+      .insert({
+        appointment_id: appt.id,
+        patient_id: appt.patient_id,
+        doctor_id: doctorId,
+        medications: dto.prescription.medications,
+        notes: dto.prescription.notes ?? null,
+        start_date: dto.prescription.startDate ?? null,
+        end_date: dto.prescription.endDate ?? null,
+        status,
+      })
+      .select('id')
+      .single()
+
+    if (prescriptionInsert.error) throw new BadRequestException(prescriptionInsert.error.message)
+    prescriptionId = prescriptionInsert.data.id
+    this.logger('PRESCRIPTION CREATED WITH ID=' + prescriptionInsert.data.id)
+  }
+
+  if (tasks.length) {
+    const results = await Promise.all(tasks)
+    results.forEach((res) => {
+      if (res.error) throw new BadRequestException(res.error.message)
+    })
+  }
+
+  const appointmentUpdatePayload: Record<string, any> = {
+    status: 'completed',
+    report: dto.report ?? appt.report,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (prescriptionId) {
+    appointmentUpdatePayload.prescription_id = prescriptionId
+  }
+
+  const { data: updated, error: updateErr } = await this.supabase
+    .from('appointments')
+    .update(appointmentUpdatePayload)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (updateErr) throw new BadRequestException(updateErr.message)
+
+  this.logger('APPOINTMENT COMPLETED BY DOCTOR FOR APPOINTMENT ID=' + id)
+
+  return this.toApi(updated as DbRow)
+}
+
+async getAssignedPrescriptions(doctorId: string) {
+  this.logger('FETCHING PRESCRIPTIONS FOR DOCTOR ID=' + doctorId)
+
+  const { data, error } = await this.supabase
+    .from('prescriptions')
+    .select('*')
+    .eq('doctor_id', doctorId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new BadRequestException(error.message)
+  if (!data) return []
+
+  const enriched: any[] = []
+
+  for (const row of data as PrescriptionRow[]) {
+    const patient = await this.profileModel.findOne({ id: row.patient_id }).lean()
+    enriched.push({
+      ...row,
+      patientName: patient?.name || '',
+    })
+  }
+
+  this.logger('TOTAL ' + enriched.length + ' PRESCRIPTIONS FOUND FOR DOCTOR')
+  return enriched
+}
+
+async getActivePrescriptionsForPatient(patientId: string) {
+  this.logger('FETCHING ACTIVE PRESCRIPTIONS FOR PATIENT ID=' + patientId)
+
+  const { data, error } = await this.supabase
+    .from('prescriptions')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new BadRequestException(error.message)
+  if (!data) return []
+
+  const today = new Date().toISOString().split('T')[0]
+
+  const active = (data as PrescriptionRow[]).filter((row) => {
+    if (row.status !== 'active') return false
+    const startsOk = !row.start_date || row.start_date <= today
+    const endsOk = !row.end_date || row.end_date >= today
+    return startsOk && endsOk
+  })
+
+  const enriched = await Promise.all(
+    active.map(async (row) => {
+      const doctor = await this.doctorProfileModel.findOne({ id: row.doctor_id }).lean()
+      return {
+        ...row,
+        doctorName: doctor?.name || '',
+      }
+    }),
+  )
+
+  this.logger('TOTAL ' + enriched.length + ' ACTIVE PRESCRIPTIONS FOUND FOR PATIENT')
+  return enriched
+}
+
+async updatePrescription(
+  prescriptionId: string,
+  doctorId: string,
+  payload: Partial<{
+    medications: PrescriptionMedication[]
+    notes: string
+    startDate: string
+    endDate: string
+    status: 'active' | 'completed'
+  }>,
+) {
+  this.logger('UPDATING PRESCRIPTION ID=' + prescriptionId + ' FOR DOCTOR=' + doctorId)
+
+  const { data: existing, error: fetchErr } = await this.supabase
+    .from('prescriptions')
+    .select('*')
+    .eq('id', prescriptionId)
+    .single()
+
+  if (fetchErr?.message?.includes('No rows')) throw new NotFoundException('Prescription not found')
+  if (fetchErr) throw new BadRequestException(fetchErr.message)
+
+  if ((existing as PrescriptionRow).doctor_id !== doctorId) {
+    throw new ForbiddenException('You are not allowed to update this prescription')
+  }
+
+  const updates: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if (payload.medications !== undefined) updates.medications = payload.medications
+  if (payload.notes !== undefined) updates.notes = payload.notes
+  if (payload.startDate !== undefined) updates.start_date = payload.startDate
+  if (payload.endDate !== undefined) updates.end_date = payload.endDate
+  if (payload.status !== undefined) updates.status = payload.status
+
+  const { data, error } = await this.supabase
+    .from('prescriptions')
+    .update(updates)
+    .eq('id', prescriptionId)
+    .select('*')
+    .single()
+
+  if (error) throw new BadRequestException(error.message)
+
+  return data
+}
+
+async getPreviousPrescriptionsForPatient(doctorId: string, patientId: string) {
+  this.logger(`FETCHING PREVIOUS PRESCRIPTIONS FOR DOCTOR=${doctorId}, PATIENT=${patientId}`)
+
+  const { data, error } = await this.supabase
+    .from('prescriptions')
+    .select('*')
+    .eq('doctor_id', doctorId)
+    .eq('patient_id', patientId)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+
+  if (error) throw new BadRequestException(error.message)
+  if (!data) return []
+
+  const result = await Promise.all(
+    (data as PrescriptionRow[]).map(async (row) => {
+      const { data: appointment } = await this.supabase
+        .from('appointments')
+        .select('id, date, time, status, type, mode, report')
+        .eq('id', row.appointment_id)
+        .single()
+
+      return {
+        ...row,
+        appointment: appointment ?? null,
+      }
+    }),
+  )
+
+  this.logger(`FETCHED ${result.length} PREVIOUS PRESCRIPTION(S) FOR PATIENT=${patientId}`)
+  return result
 }
 
 

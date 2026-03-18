@@ -4,10 +4,13 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto'
 import { UpdateAppointmentDto } from './dto/update-appointment.dto'
 import { AppointmentMode, AppointmentStatus, AppointmentTypes } from './appointment.enums'
 import { CompleteNutritionistAppointmentDto } from './dto/complete-nutritionist-appointment.dto'
+import { CompleteDoctorAppointmentDto } from './dto/complete-doctor-appointment.dto'
 import { firstValueFrom } from 'rxjs'
 import { AvailableSlotsQueryDto } from './dto/available-slots.dto'
 import { CancelAppointmentDto } from './dto/cancel-appointment.dto'
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 
+@ApiTags('Appointments')
 @Controller('appointments')
 export class AppointmentsController {
   constructor(
@@ -82,11 +85,143 @@ async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
 
   
   @Post(':id/complete')
+  @ApiOperation({
+    summary: 'Complete nutritionist appointment',
+    description: 'Marks appointment as completed and optionally assigns diet plan/referred tests.',
+  })
+  @ApiParam({ name: 'id', description: 'Appointment ID (UUID)' })
+  @ApiResponse({ status: 200, description: 'Appointment completed successfully' })
   completeAppointment(
     @Param('id') id: string,
     @Body() body: { dto: CompleteNutritionistAppointmentDto; nutritionistId: string },
   ) {
     return this.client.send({ cmd: 'complete_nutritionist_appointment' }, { id, ...body })
+  }
+
+  @Post(':id/complete-doctor')
+  @ApiOperation({
+    summary: 'Complete doctor appointment',
+    description: 'Marks doctor appointment as completed and optionally assigns prescription/referred tests.',
+  })
+  @ApiParam({ name: 'id', description: 'Appointment ID (UUID)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        doctorId: { type: 'string', format: 'uuid' },
+        dto: {
+          type: 'object',
+          properties: {
+            report: { type: 'string' },
+            referredTestIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+            prescription: {
+              type: 'object',
+              properties: {
+                notes: { type: 'string' },
+                startDate: { type: 'string', example: '2026-03-18' },
+                endDate: { type: 'string', example: '2026-04-18' },
+                status: { type: 'string', enum: ['active', 'completed'] },
+                medications: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string' },
+                      dosage: { type: 'string' },
+                      frequency: { type: 'string' },
+                      duration: { type: 'string' },
+                      instructions: { type: 'string' },
+                      time: { type: 'string' },
+                    },
+                    required: ['name', 'dosage', 'frequency', 'duration'],
+                  },
+                },
+              },
+              required: ['medications'],
+            },
+          },
+        },
+      },
+      required: ['doctorId', 'dto'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Doctor appointment completed successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid payload or appointment state' })
+  completeDoctorAppointment(
+    @Param('id') id: string,
+    @Body() body: { dto: CompleteDoctorAppointmentDto; doctorId: string },
+  ) {
+    return this.client.send({ cmd: 'complete_doctor_appointment' }, { id, ...body })
+  }
+
+  @Get('prescriptions/assigned')
+  @ApiOperation({
+    summary: 'Get assigned prescriptions for doctor',
+    description: 'Returns all prescriptions issued by a specific doctor.',
+  })
+  @ApiQuery({ name: 'doctorId', required: true, description: 'Doctor user ID (UUID)' })
+  @ApiResponse({ status: 200, description: 'Assigned prescriptions fetched successfully' })
+  getAssignedPrescriptions(@Query('doctorId') doctorId: string) {
+    return this.client.send({ cmd: 'get_assigned_prescriptions' }, doctorId)
+  }
+
+  @Get('prescriptions/patient/:patientId')
+  @ApiOperation({
+    summary: 'Get active prescriptions for patient',
+    description: 'Returns active prescriptions for a patient based on status and date window.',
+  })
+  @ApiParam({ name: 'patientId', description: 'Patient user ID (UUID)' })
+  @ApiResponse({ status: 200, description: 'Active prescriptions fetched successfully' })
+  getActivePrescriptionsForPatient(@Param('patientId') patientId: string) {
+    return this.client.send({ cmd: 'get_active_prescriptions_for_patient' }, patientId)
+  }
+
+  @Patch('prescriptions/:id')
+  @ApiOperation({
+    summary: 'Update prescription',
+    description: 'Updates an issued prescription. Only the issuing doctor can update it.',
+  })
+  @ApiParam({ name: 'id', description: 'Prescription ID (UUID)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        doctorId: { type: 'string', format: 'uuid' },
+        dto: {
+          type: 'object',
+          properties: {
+            notes: { type: 'string' },
+            startDate: { type: 'string', example: '2026-03-18' },
+            endDate: { type: 'string', example: '2026-04-18' },
+            status: { type: 'string', enum: ['active', 'completed'] },
+            medications: { type: 'array', items: { type: 'object' } },
+          },
+        },
+      },
+      required: ['doctorId', 'dto'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Prescription updated successfully' })
+  updatePrescription(
+    @Param('id') prescriptionId: string,
+    @Body() body: { doctorId: string; dto: any },
+  ) {
+    return this.client.send({ cmd: 'update_prescription' }, { prescriptionId, ...body })
+  }
+
+  @Get('prescriptions/previous/:doctorId/:patientId')
+  @ApiOperation({
+    summary: 'Get previous prescriptions for patient (doctor POV)',
+    description: 'Returns completed prescriptions for a doctor-patient pair.',
+  })
+  @ApiParam({ name: 'doctorId', description: 'Doctor user ID (UUID)' })
+  @ApiParam({ name: 'patientId', description: 'Patient user ID (UUID)' })
+  @ApiResponse({ status: 200, description: 'Previous prescriptions fetched successfully' })
+  getPreviousPrescriptions(
+    @Param('doctorId') doctorId: string,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.client.send({ cmd: 'get_previous_prescriptions' }, { doctorId, patientId })
   }
 
   @Patch(':id/cancel')

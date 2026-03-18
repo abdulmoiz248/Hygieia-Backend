@@ -4,6 +4,7 @@ import { AppointmentsController } from './appointments.controller'
 import { MongooseModule } from '@nestjs/mongoose'
 import { Profile,ProfileSchema } from './schema/patient.profile.schema'
 import { NutritionistProfile, NutritionistProfileSchema } from './schema/nutritionist-profile.schema'
+import { DoctorProfile, DoctorProfileSchema } from './schema/doctor-profile.schema'
 import { MailerModule } from '../mailer/mailer.module'
 import { ClientsModule, Transport } from '@nestjs/microservices'
 
@@ -32,7 +33,8 @@ import { ClientsModule, Transport } from '@nestjs/microservices'
       ]),
       MongooseModule.forFeature([
         { name: Profile.name, schema: ProfileSchema },
-        { name: NutritionistProfile.name, schema: NutritionistProfileSchema }
+        { name: NutritionistProfile.name, schema: NutritionistProfileSchema },
+        { name: DoctorProfile.name, schema: DoctorProfileSchema }
       ]),
       MailerModule,
    

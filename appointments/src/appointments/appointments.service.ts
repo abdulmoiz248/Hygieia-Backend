@@ -9,6 +9,7 @@ import { Profile, ProfileDocument } from './schema/patient.profile.schema'
 import { Model } from 'mongoose'
 import { CompleteNutritionistAppointmentDto } from './dto/complete-nutritionist-appointment.dto'
 import { NutritionistProfile, NutritionistProfileDocument } from './schema/nutritionist-profile.schema'
+import { DoctorProfile, DoctorProfileDocument } from './schema/doctor-profile.schema'
 import { MailerService } from '../mailer/mailer.service'
 import { createZoomMeeting } from 'src/utils/zoom'
 import { ClientProxy } from '@nestjs/microservices'
@@ -88,6 +89,7 @@ export class AppointmentsService {
     @Inject(SUPABASE) private readonly supabase: SupabaseClient,
     @InjectModel(Profile.name) private profileModel: Model<ProfileDocument>,
     @InjectModel(NutritionistProfile.name) private nut: Model<NutritionistProfileDocument>,
+    @InjectModel(DoctorProfile.name) private doctorProfileModel: Model<DoctorProfileDocument>,
     @Inject('SCHEDULER_SERVICE') private readonly schedulerClient: ClientProxy,
     @Inject('MAILER_SERVICE') private readonly mailerClient: ClientProxy,
     private readonly mailerService: MailerService,
@@ -130,8 +132,32 @@ export class AppointmentsService {
     } as Partial<DbRow>
   }
 
+  private normalizeAppointmentType(type: string): AppointmentTypes {
+    const normalized = (type ?? '').toString().trim().toLowerCase()
+
+    const aliases: Record<string, AppointmentTypes> = {
+      consultation: AppointmentTypes.Consultation,
+      emergency: AppointmentTypes.Emergency,
+      'follow-up': AppointmentTypes.FollowUp,
+      followup: AppointmentTypes.FollowUp,
+      follow_up: AppointmentTypes.FollowUp,
+      'follow up': AppointmentTypes.FollowUp,
+    }
+
+    const resolved = aliases[normalized]
+    if (!resolved) {
+      throw new BadRequestException(
+        `Invalid appointment type '${type}'. Allowed types: consultation, follow-up, emergency`,
+      )
+    }
+
+    return resolved
+  }
+
   async create(dto: CreateAppointmentDto): Promise<ApiRow> {
     this.logger("Appointment creation called for patient id="+dto.patientId)
+
+    dto.type = this.normalizeAppointmentType(dto.type as unknown as string)
     
     // Generate Zoom link if appointment mode is online
     let meetLink: string | null = null
@@ -992,7 +1018,7 @@ async getAppointmentsForPatient(patientId: string) {
 
   const userMap = new Map(users.map(u => [u.id, u]))
 
-  // fetch doctorDetails in parallel only for nutritionists
+  // fetch doctorDetails in parallel for nutritionists and doctors
   const results = await Promise.all(
     appointments.map(async row => {
       const user = userMap.get(row.doctor_id)
@@ -1001,17 +1027,19 @@ async getAppointmentsForPatient(patientId: string) {
 
       if (user?.role === 'nutritionist') {
         doctorDetails = await this.nut.findOne({ id: user.id }).lean()
-        
-        // Get location for physical appointments based on the appointment day
-        if (row.mode === 'physical' && doctorDetails?.workingHours) {
-          const appointmentDate = new Date(row.date)
-          const dayOfWeek = appointmentDate.toLocaleString('en-US', { weekday: 'long' })
-          const workingDay = doctorDetails.workingHours.find(
-            (wh: any) => wh.day.toLowerCase() === dayOfWeek.toLowerCase()
-          )
-          appointmentLocation = workingDay?.location || 'Location not specified'
-        }
-      }//else doctor thing
+      } else if (user?.role === 'doctor') {
+        doctorDetails = await this.doctorProfileModel.findOne({ id: user.id }).lean()
+      }
+
+      // Get location for physical appointments based on the appointment day
+      if (row.mode === 'physical' && doctorDetails?.workingHours) {
+        const appointmentDate = new Date(row.date)
+        const dayOfWeek = appointmentDate.toLocaleString('en-US', { weekday: 'long' })
+        const workingDay = doctorDetails.workingHours.find(
+          (wh: any) => wh.day.toLowerCase() === dayOfWeek.toLowerCase()
+        )
+        appointmentLocation = workingDay?.location || 'Location not specified'
+      }
 
       return {
         id: row.id,
@@ -1124,8 +1152,8 @@ async getAvailableSlots(providerId: string, role: string, date: string) {
     this.logger(`Looking up nutritionist profile for ${providerId}`)
     profile = await this.nut.findOne({ id: providerId }).lean()
   } else if (role === 'doctor') {
-    this.logger(`Doctor profile fetching not implemented for ${providerId}`)
-    return { slots: [], message: 'Doctor profile fetching not implemented yet' }
+    this.logger(`Looking up doctor profile for ${providerId}`)
+    profile = await this.doctorProfileModel.findOne({ id: providerId }).lean()
   }
 
   if (!profile) {

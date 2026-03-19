@@ -553,10 +553,6 @@ CREATE INDEX "idx_prescriptions_status" ON "public"."prescriptions" USING "btree
 
 
 
-CREATE UNIQUE INDEX "uq_med_adherence_daily" ON "public"."medication_adherence_logs" USING "btree" ("patient_id", "prescription_id", "medication_id", "taken_date");
-
-
-
 CREATE OR REPLACE TRIGGER "trg_medication_adherence_updated_at" BEFORE UPDATE ON "public"."medication_adherence_logs" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 

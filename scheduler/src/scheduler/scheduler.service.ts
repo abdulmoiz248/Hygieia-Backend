@@ -1,11 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common'
-import * as cron from 'node-cron'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { createClient } from '@supabase/supabase-js'
 import { InjectQueue } from '@nestjs/bullmq'
 import { Queue } from 'bullmq'
 import { AppointmentDto } from 'src/dto/appointment.dto'
 import { LabBookingConfirmationDto } from 'src/dto/lab-booking-confirmation.dto'
 import { AppointmentCancellationDto } from 'src/dto/appointment-cancellation.dto'
+import { ClientProxy } from '@nestjs/microservices/client/client-proxy'
+import { Cron } from '@nestjs/schedule'
+import { firstValueFrom } from 'rxjs'
 
 // Format date as "25 Nov 2025" format
 function formatDateForNotification(dateStr: string): string {
@@ -37,14 +39,140 @@ const REASON_LABELS: Record<string, string> = {
   'other': 'Other',
 }
 
+type PrescriptionMedicationRecord = {
+  id?: string
+  medicationId?: string
+  medication_id?: string
+  name?: string
+}
+
+type PrescriptionRecord = {
+  id: string
+  patient_id: string
+  medications: PrescriptionMedicationRecord[]
+  start_date: string | null
+  end_date: string | null
+  status: string
+}
+
+type DietPlanRecord = {
+  patient_id: string
+  start_date: string | null
+  end_date: string | null
+}
+
+type MedicationAdherenceLogRecord = {
+  prescription_id: string
+  medication_id: string
+  taken: boolean
+  taken_at: string
+}
+
+type MedicationStats = {
+  expectedDoses: number
+  dosesTaken: number
+  missedDoses: number
+  adherencePercent: number
+}
+
 @Injectable()
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name)
   private readonly supabase
 
-  constructor(@InjectQueue('appointment-schedules') private appointmentQueue: Queue,
-  @InjectQueue('lab-schedules') private labQueue: Queue) {
+  constructor(
+    @InjectQueue('appointment-schedules') private appointmentQueue: Queue,
+    @InjectQueue('lab-schedules') private labQueue: Queue,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
+  ) {
     this.supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  }
+
+  @Cron('*/10 * * * *', {
+    name: 'patient-adherence-sync',
+    timeZone: 'UTC',
+  })
+  async syncPatientAdherenceMetrics() {
+    this.logger.log('Starting 10-minute patient adherence sync...')
+
+    const today = this.getUtcDateOnly(new Date())
+
+    const { data: allPrescriptions, error: prescriptionsError } = await this.supabase
+      .from('prescriptions')
+      .select('id, patient_id, medications, start_date, end_date, status')
+
+    if (prescriptionsError) {
+      this.logger.error(`Failed to fetch prescriptions: ${prescriptionsError.message}`)
+      return
+    }
+
+    const { data: allDietPlans, error: dietPlansError } = await this.supabase
+      .from('diet_plan')
+      .select('patient_id, start_date, end_date')
+
+    if (dietPlansError) {
+      this.logger.error(`Failed to fetch diet plans: ${dietPlansError.message}`)
+      return
+    }
+
+    const prescriptions = (allPrescriptions || []) as PrescriptionRecord[]
+    const dietPlans = (allDietPlans || []) as DietPlanRecord[]
+
+    const patientIds = new Set<string>()
+
+    for (const row of prescriptions) {
+      if (row?.patient_id) patientIds.add(row.patient_id)
+    }
+
+    for (const plan of dietPlans) {
+      if (plan?.patient_id) patientIds.add(plan.patient_id)
+    }
+
+    if (patientIds.size === 0) {
+      this.logger.log('No patients found with assigned prescriptions or diet plans')
+      return
+    }
+
+    let updatedPatients = 0
+
+    for (const patientId of patientIds) {
+      try {
+        const patientPrescriptions = prescriptions.filter(
+          (row) => row.patient_id === patientId && this.isRangeActiveOnDate(row.start_date, row.end_date, today),
+        )
+
+        const prescriptionIds = patientPrescriptions.map((item) => item.id)
+        const activeDietPlanAssigned = dietPlans.some(
+          (plan) => plan.patient_id === patientId && this.isRangeActiveOnDate(plan.start_date, plan.end_date, today),
+        )
+
+        let medicationLogs: MedicationAdherenceLogRecord[] = []
+
+        if (prescriptionIds.length > 0) {
+          const { data: logs, error: logsError } = await this.supabase
+            .from('medication_adherence_logs')
+            .select('prescription_id, medication_id, taken, taken_at')
+            .eq('patient_id', patientId)
+            .in('prescription_id', prescriptionIds)
+
+          if (logsError) {
+            this.logger.error(`Failed to fetch medication logs for patient ${patientId}: ${logsError.message}`)
+            continue
+          }
+
+          medicationLogs = (logs || []) as MedicationAdherenceLogRecord[]
+        }
+
+        const stats = this.calculateMedicationStats(patientPrescriptions, medicationLogs, today, activeDietPlanAssigned)
+
+        await this.updatePatientProfileMetrics(patientId, stats)
+        updatedPatients += 1
+      } catch (error: any) {
+        this.logger.error(`Failed adherence update for patient ${patientId}: ${error?.message || error}`)
+      }
+    }
+
+    this.logger.log(`Completed adherence sync. Updated ${updatedPatients} patient profile(s).`)
   }
 
 
@@ -257,5 +385,157 @@ async handleAppointmentCancellation(data: AppointmentCancellationDto) {
     } else {
       this.logger.log(`Notification inserted for user: ${userId}`)
     }
+  }
+
+  private calculateMedicationStats(
+    prescriptions: PrescriptionRecord[],
+    medicationLogs: MedicationAdherenceLogRecord[],
+    today: string,
+    activeDietPlanAssigned: boolean,
+  ): MedicationStats {
+    const expectedDoseKeys = this.buildExpectedDoseKeys(prescriptions, today)
+    const expectedDoses = expectedDoseKeys.size
+
+    const takenByExpectedKey = new Map<string, boolean>()
+
+    for (const log of medicationLogs) {
+      if (!this.isLogOnOrBeforeDate(log.taken_at, today)) continue
+
+      const logDate = this.getUtcDateOnly(new Date(log.taken_at))
+      const logMedicationId = (log.medication_id || '').toString().trim()
+      const expectedKey = `${log.prescription_id}|${logMedicationId}|${logDate}`
+
+      if (!expectedDoseKeys.has(expectedKey)) continue
+
+      const alreadyTaken = takenByExpectedKey.get(expectedKey) || false
+      takenByExpectedKey.set(expectedKey, alreadyTaken || !!log.taken)
+    }
+
+    let dosesTaken = 0
+    let missedDoses = 0
+
+    for (const expectedKey of expectedDoseKeys) {
+      if (takenByExpectedKey.get(expectedKey)) {
+        dosesTaken += 1
+      } else {
+        missedDoses += 1
+      }
+    }
+
+    const adherencePercentRaw =
+      expectedDoses > 0
+        ? (dosesTaken / expectedDoses) * 100
+        : activeDietPlanAssigned
+          ? 100
+          : 0
+
+    const adherencePercent = Math.max(0, Math.min(100, Number(adherencePercentRaw.toFixed(2))))
+
+    return {
+      expectedDoses,
+      dosesTaken,
+      missedDoses,
+      adherencePercent,
+    }
+  }
+
+  private buildExpectedDoseKeys(prescriptions: PrescriptionRecord[], today: string): Set<string> {
+    const expectedDoseKeys = new Set<string>()
+
+    for (const prescription of prescriptions) {
+      const medications = Array.isArray(prescription.medications) ? prescription.medications : []
+      if (medications.length === 0) continue
+
+      const startDate = prescription.start_date || today
+      const effectiveEndDate = this.minDate(prescription.end_date || today, today)
+
+      if (effectiveEndDate < startDate) continue
+
+      const days = this.daysBetweenInclusive(startDate, effectiveEndDate)
+      if (days <= 0) continue
+
+      const dates = this.listDatesInclusive(startDate, effectiveEndDate)
+
+      for (const date of dates) {
+        for (const medication of medications) {
+          const medicationId = this.getMedicationIdentifier(medication)
+          if (!medicationId) continue
+          expectedDoseKeys.add(`${prescription.id}|${medicationId}|${date}`)
+        }
+      }
+    }
+
+    return expectedDoseKeys
+  }
+
+  private getMedicationIdentifier(medication: PrescriptionMedicationRecord): string {
+    return (
+      medication?.id || medication?.medicationId || medication?.medication_id || medication?.name || ''
+    )
+      .toString()
+      .trim()
+  }
+
+  private isLogOnOrBeforeDate(takenAt: string, dateOnly: string): boolean {
+    if (!takenAt) return false
+    const logDate = this.getUtcDateOnly(new Date(takenAt))
+    return logDate <= dateOnly
+  }
+
+  private isRangeActiveOnDate(startDate: string | null, endDate: string | null, date: string): boolean {
+    const start = startDate || date
+    const end = endDate || date
+    return start <= date && end >= date
+  }
+
+  private minDate(firstDate: string, secondDate: string): string {
+    return firstDate <= secondDate ? firstDate : secondDate
+  }
+
+  private daysBetweenInclusive(startDate: string, endDate: string): number {
+    const start = new Date(`${startDate}T00:00:00.000Z`)
+    const end = new Date(`${endDate}T00:00:00.000Z`)
+
+    const millisecondsDiff = end.getTime() - start.getTime()
+    return Math.floor(millisecondsDiff / (24 * 60 * 60 * 1000)) + 1
+  }
+
+  private listDatesInclusive(startDate: string, endDate: string): string[] {
+    const dates: string[] = []
+    const cursor = new Date(`${startDate}T00:00:00.000Z`)
+    const end = new Date(`${endDate}T00:00:00.000Z`)
+
+    while (cursor.getTime() <= end.getTime()) {
+      dates.push(this.getUtcDateOnly(cursor))
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+
+    return dates
+  }
+
+  private getUtcDateOnly(date: Date): string {
+    return date.toISOString().split('T')[0]
+  }
+
+  private async updatePatientProfileMetrics(patientId: string, stats: MedicationStats) {
+    const profilePayload = {
+      id: patientId,
+      healthscore: Math.round(stats.adherencePercent),
+      adherence: stats.adherencePercent.toString(),
+      doses_taken: stats.dosesTaken.toString(),
+      missed_doses: stats.missedDoses.toString(),
+    }
+
+    await firstValueFrom(
+      this.authClient.send(
+        { cmd: 'upsert-user-profile' },
+        {
+          role: 'patient',
+          profileData: {
+            profileData: profilePayload,
+          },
+        },
+      ),
+    )
   }
 }

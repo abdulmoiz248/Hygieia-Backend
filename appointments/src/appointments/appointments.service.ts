@@ -1161,25 +1161,6 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
   }
 
   const dateKey = takenAtDate.toISOString().split('T')[0]
-  const dayStartIso = `${dateKey}T00:00:00.000Z`
-  const dayEnd = new Date(`${dateKey}T00:00:00.000Z`)
-  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1)
-  const dayEndIso = dayEnd.toISOString()
-
-  const { data: existingLogs, error: existingError } = await this.supabase
-    .from('medication_adherence_logs')
-    .select('*')
-    .eq('patient_id', payload.patientId)
-    .eq('prescription_id', payload.prescriptionId)
-    .eq('medication_id', payload.medicationId)
-    .gte('taken_at', dayStartIso)
-    .lt('taken_at', dayEndIso)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-
-  if (existingError) {
-    throw new BadRequestException(existingError.message)
-  }
 
   const upsertPayload = {
     patient_id: payload.patientId,
@@ -1192,27 +1173,19 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
     updated_at: new Date().toISOString(),
   }
 
-  let saved: MedicationAdherenceRow
+  const { data: inserted, error: insertError } = await this.supabase
+    .from('medication_adherence_logs')
+    .insert(upsertPayload)
+    .select('*')
+    .single()
 
-  if (existingLogs && existingLogs.length > 0) {
-    const { data: updated, error: updateError } = await this.supabase
-      .from('medication_adherence_logs')
-      .update(upsertPayload)
-      .eq('id', existingLogs[0].id)
-      .select('*')
-      .single()
+  if (insertError) throw new BadRequestException(insertError.message)
+  const saved = inserted as MedicationAdherenceRow
 
-    if (updateError) throw new BadRequestException(updateError.message)
-    saved = updated as MedicationAdherenceRow
-  } else {
-    const { data: inserted, error: insertError } = await this.supabase
-      .from('medication_adherence_logs')
-      .insert(upsertPayload)
-      .select('*')
-      .single()
-
-    if (insertError) throw new BadRequestException(insertError.message)
-    saved = inserted as MedicationAdherenceRow
+  try {
+    await this.refreshPatientAdherenceMetrics(payload.patientId)
+  } catch (error: any) {
+    this.logger(`FAILED TO REFRESH ADHERENCE METRICS FOR PATIENT=${payload.patientId}: ${error?.message || error}`)
   }
 
   return {
@@ -1229,6 +1202,171 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
       date: dateKey,
     },
   }
+}
+
+private async refreshPatientAdherenceMetrics(patientId: string) {
+  const today = this.getUtcDateOnly(new Date())
+
+  const { data: allPrescriptions, error: prescriptionsError } = await this.supabase
+    .from('prescriptions')
+    .select('id, patient_id, medications, start_date, end_date, status')
+    .eq('patient_id', patientId)
+
+  if (prescriptionsError) throw new BadRequestException(prescriptionsError.message)
+
+  const activePrescriptions = ((allPrescriptions as PrescriptionRow[]) || []).filter((row) => {
+    if (row.status !== 'active') return false
+    const startsOk = !row.start_date || row.start_date <= today
+    const endsOk = !row.end_date || row.end_date >= today
+    return startsOk && endsOk
+  })
+
+  const prescriptionIds = activePrescriptions.map((item) => item.id)
+
+  let medicationLogs: MedicationAdherenceRow[] = []
+  if (prescriptionIds.length > 0) {
+    const { data: logs, error: logsError } = await this.supabase
+      .from('medication_adherence_logs')
+      .select('id, patient_id, prescription_id, medication_id, taken, taken_at, scheduled_time, source, created_at, updated_at')
+      .eq('patient_id', patientId)
+      .in('prescription_id', prescriptionIds)
+
+    if (logsError) throw new BadRequestException(logsError.message)
+    medicationLogs = (logs as MedicationAdherenceRow[]) || []
+  }
+
+  const { data: dietPlans, error: dietPlansError } = await this.supabase
+    .from('diet_plan')
+    .select('start_date, end_date')
+    .eq('patient_id', patientId)
+
+  if (dietPlansError) throw new BadRequestException(dietPlansError.message)
+
+  const hasActiveDietPlan = (dietPlans || []).some((plan: any) => {
+    const startsOk = !plan.start_date || plan.start_date <= today
+    const endsOk = !plan.end_date || plan.end_date >= today
+    return startsOk && endsOk
+  })
+
+  const stats = this.calculateMedicationStatsForPatient(activePrescriptions, medicationLogs, today, hasActiveDietPlan)
+
+  await this.profileModel.findOneAndUpdate(
+    { id: patientId },
+    {
+      $set: {
+        healthscore: Math.round(stats.adherence),
+        adherence: stats.adherence.toString(),
+        doses_taken: stats.dosesTaken.toString(),
+        missed_doses: stats.missedDoses.toString(),
+      },
+    },
+    { new: true, upsert: true },
+  )
+}
+
+private calculateMedicationStatsForPatient(
+  prescriptions: PrescriptionRow[],
+  medicationLogs: MedicationAdherenceRow[],
+  today: string,
+  hasActiveDietPlan: boolean,
+): { adherence: number; dosesTaken: number; missedDoses: number; expectedDoses: number } {
+  const expectedDoseKeys = this.buildExpectedDoseKeysForPatient(prescriptions, today)
+  const expectedDoses = expectedDoseKeys.size
+
+  const takenByExpectedKey = new Map<string, boolean>()
+
+  for (const log of medicationLogs) {
+    if (!this.isLogOnOrBeforeDate(log.taken_at, today)) continue
+
+    const logDate = this.getUtcDateOnly(new Date(log.taken_at))
+    const logMedicationId = (log.medication_id || '').toString().trim()
+    const expectedKey = `${log.prescription_id}|${logMedicationId}|${logDate}`
+
+    if (!expectedDoseKeys.has(expectedKey)) continue
+
+    const alreadyTaken = takenByExpectedKey.get(expectedKey) || false
+    takenByExpectedKey.set(expectedKey, alreadyTaken || !!log.taken)
+  }
+
+  let dosesTaken = 0
+  let missedDoses = 0
+
+  for (const expectedKey of expectedDoseKeys) {
+    if (takenByExpectedKey.get(expectedKey)) {
+      dosesTaken += 1
+    } else {
+      missedDoses += 1
+    }
+  }
+
+  const adherenceRaw =
+    expectedDoses > 0
+      ? (dosesTaken / expectedDoses) * 100
+      : hasActiveDietPlan
+        ? 100
+        : 0
+
+  const adherence = Math.max(0, Math.min(100, Number(adherenceRaw.toFixed(2))))
+
+  return {
+    adherence,
+    dosesTaken,
+    missedDoses,
+    expectedDoses,
+  }
+}
+
+private buildExpectedDoseKeysForPatient(prescriptions: PrescriptionRow[], today: string): Set<string> {
+  const expectedDoseKeys = new Set<string>()
+
+  for (const prescription of prescriptions) {
+    const medications = Array.isArray(prescription.medications) ? prescription.medications : []
+    if (medications.length === 0) continue
+
+    const startDate = prescription.start_date || today
+    const endDate = prescription.end_date && prescription.end_date < today ? prescription.end_date : today
+    if (endDate < startDate) continue
+
+    const dates = this.listDatesInclusive(startDate, endDate)
+
+    for (const date of dates) {
+      for (const medication of medications) {
+        const medicationId = this.getMedicationIdentifier(medication)
+        if (!medicationId) continue
+        expectedDoseKeys.add(`${prescription.id}|${medicationId}|${date}`)
+      }
+    }
+  }
+
+  return expectedDoseKeys
+}
+
+private getMedicationIdentifier(medication: PrescriptionMedication): string {
+  const medAny = medication as any
+  return (medAny?.id || medAny?.medicationId || medAny?.medication_id || medAny?.name || '').toString().trim()
+}
+
+private listDatesInclusive(startDate: string, endDate: string): string[] {
+  const dates: string[] = []
+  const cursor = new Date(`${startDate}T00:00:00.000Z`)
+  const end = new Date(`${endDate}T00:00:00.000Z`)
+
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(this.getUtcDateOnly(cursor))
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+
+  return dates
+}
+
+private isLogOnOrBeforeDate(takenAt: string, dateOnly: string): boolean {
+  if (!takenAt) return false
+  const logDate = this.getUtcDateOnly(new Date(takenAt))
+  return logDate <= dateOnly
+}
+
+private getUtcDateOnly(date: Date): string {
+  return date.toISOString().split('T')[0]
 }
 
 async getMedicationLogs(query: MedicationLogsQueryDto) {

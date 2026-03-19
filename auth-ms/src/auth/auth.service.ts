@@ -760,15 +760,29 @@ export class AuthService {
     case 'patient':
       // ✅ Upsert into Mongo instead of Supabase
       console.log("Upserting Patient Data...")
+      const patientUpdateData = { ...profileData }
+      const incomingAvatar = typeof patientUpdateData.avatar === 'string' ? patientUpdateData.avatar.trim() : ''
+      const incomingImg = typeof patientUpdateData.img === 'string' ? patientUpdateData.img.trim() : ''
+
+      if (!incomingAvatar && incomingImg) {
+        patientUpdateData.avatar = incomingImg
+      }
+
+      delete patientUpdateData.img
+
+      if (!patientUpdateData.avatar || (typeof patientUpdateData.avatar === 'string' && patientUpdateData.avatar.trim() === '')) {
+        delete patientUpdateData.avatar
+      }
+
       const existing = await this.profileModel.findOne({ id: profileData.id }).exec()
       if (existing) {
         profile = await this.profileModel.findOneAndUpdate(
           { id: profileData.id },
-          { $set: profileData },
+          { $set: patientUpdateData },
           { new: true },
         ).lean().exec()
       } else {
-        const created = new this.profileModel(profileData)
+        const created = new this.profileModel(patientUpdateData)
         profile = await created.save()
       }
       break
@@ -873,14 +887,17 @@ export class AuthService {
     }
     break
   case 'patient':
-    ({ error } = await client
-      .from('patient_profiles')
-      .upsert(
-        { id: userId, img: imgUrl }, 
-        { onConflict: 'id' }
-      )
-      .select('*')
-      .single())
+    const existingPatientPhoto = await this.profileModel.findOne({ id: userId }).exec()
+    if (existingPatientPhoto) {
+      await this.profileModel.findOneAndUpdate(
+        { id: userId },
+        { $set: { avatar: imgUrl } },
+        { new: true },
+      ).lean().exec()
+    } else {
+      const createdPatientPhoto = new this.profileModel({ id: userId, avatar: imgUrl })
+      await createdPatientPhoto.save()
+    }
     break
     
   case 'nutritionist':

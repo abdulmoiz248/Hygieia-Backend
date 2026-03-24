@@ -8,6 +8,8 @@ import { BullModule } from '@nestjs/bullmq'
 import { LabsReminderModule } from './labs-reminder/labs-reminder.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { FitbitModule } from './fitbit/fitbit.module';
+import { NutritionAndAdherenceModule } from './nutrition-and-adherence/nutrition-and-adherence.module';
+import { TriggerModule } from './trigger/trigger.module';
 
 
 @Module({
@@ -26,6 +28,8 @@ import { FitbitModule } from './fitbit/fitbit.module';
     }),
       LabsReminderModule,
       FitbitModule,
+      NutritionAndAdherenceModule,
+      TriggerModule,
   
   ],
   controllers: [AppController],

@@ -8,6 +8,7 @@ import { LabsModule } from './labs/labs.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { CvModule } from './cv/cv.module';
 import { AuthModule } from './auth/auth.module';
+import { NutritionAndAdherenceMailerModule } from './nutrition-and-adherence/nutrition-and-adherence.module';
 
 @Module({
   imports: [  ConfigModule.forRoot({ isGlobal: true }),
@@ -16,7 +17,8 @@ import { AuthModule } from './auth/auth.module';
     LabsModule,
     NewsletterModule,
     CvModule,
-    AuthModule],
+    AuthModule,
+    NutritionAndAdherenceMailerModule],
   controllers: [AppController],
   providers: [AppService],
 })

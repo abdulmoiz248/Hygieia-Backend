@@ -21,6 +21,7 @@ import { DoctorsModule } from './doctors/doctors.module';
 import { PatientJournalModule } from './patient-journal/patient-journal.module';
 import { FaqModule } from './faq/faq.module';
 import { RagModule } from './rag/rag.module';
+import { CronTestModule } from './cron-test/cron-test.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { RagModule } from './rag/rag.module';
     DoctorsModule,
     FaqModule,
     RagModule,
+    CronTestModule,
   ],
   controllers: [AppController],
   providers: [AppService],

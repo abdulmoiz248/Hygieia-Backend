@@ -1000,7 +1000,7 @@ async getAssignedPrescriptions(doctorId: string) {
 }
 
 async getActivePrescriptionsForPatient(patientId: string) {
-  this.logger('FETCHING ACTIVE PRESCRIPTIONS FOR PATIENT ID=' + patientId)
+  this.logger('FETCHING PRESCRIPTIONS FOR PATIENT ID=' + patientId)
 
   const { data, error } = await this.supabase
     .from('prescriptions')
@@ -1011,17 +1011,8 @@ async getActivePrescriptionsForPatient(patientId: string) {
   if (error) throw new BadRequestException(error.message)
   if (!data) return []
 
-  const today = new Date().toISOString().split('T')[0]
-
-  const active = (data as PrescriptionRow[]).filter((row) => {
-    if (row.status !== 'active') return false
-    const startsOk = !row.start_date || row.start_date <= today
-    const endsOk = !row.end_date || row.end_date >= today
-    return startsOk && endsOk
-  })
-
   const enriched = await Promise.all(
-    active.map(async (row) => {
+    (data as PrescriptionRow[]).map(async (row) => {
       const doctor = await this.doctorProfileModel.findOne({ id: row.doctor_id }).lean()
       return {
         ...row,
@@ -1030,8 +1021,18 @@ async getActivePrescriptionsForPatient(patientId: string) {
     }),
   )
 
-  this.logger('TOTAL ' + enriched.length + ' ACTIVE PRESCRIPTIONS FOUND FOR PATIENT')
-  return enriched
+  const statusOrder = { active: 0, completed: 1 }
+  const sorted = enriched.sort((a: any, b: any) => {
+    const left = statusOrder[(a.status as 'active' | 'completed')] ?? 99
+    const right = statusOrder[(b.status as 'active' | 'completed')] ?? 99
+    if (left !== right) return left - right
+    const aDate = new Date(a.created_at || 0).getTime()
+    const bDate = new Date(b.created_at || 0).getTime()
+    return bDate - aDate
+  })
+
+  this.logger('TOTAL ' + sorted.length + ' PRESCRIPTIONS FOUND FOR PATIENT')
+  return sorted
 }
 
 async updatePrescription(

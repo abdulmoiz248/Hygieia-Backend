@@ -7,6 +7,11 @@ import { MessagePattern } from '@nestjs/microservices'
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
+  @MessagePattern({ cmd: 'get_dashboard_analytics' })
+  async getDashboardAnalytics(patientId: string) {
+    return this.analyticsService.getDashboardAnalytics(patientId)
+  }
+
    @MessagePattern({ cmd: 'getFitnessData' })
   async getFitnessData(patientId: string) {
     return this.analyticsService.getPatientAnalytics(patientId)

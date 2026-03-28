@@ -21,6 +21,8 @@ import { AppointmentUpdateDto } from './dto/appointment-update.dto'
 import { CancelAppointmentDto, CancellationReason } from './dto/cancel-appointment.dto'
 import { MedicationTakenDto } from './dto/medication-taken.dto'
 import { MedicationLogsQueryDto } from './dto/medication-logs-query.dto'
+import { SubmitAppointmentReviewDto } from './dto/submit-appointment-review.dto'
+import { GetProviderReviewsDto } from './dto/get-provider-reviews.dto'
 
 type DbRow = {
   id: string
@@ -35,6 +37,23 @@ type DbRow = {
   mode: string
   data_shared: boolean
   link: string | null
+  start_link?: string | null
+  diet_plan_id?: string | null
+  prescription_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+type ProviderRole = 'doctor' | 'nutritionist'
+
+type AppointmentReviewDbRow = {
+  id: string
+  appointment_id: string
+  patient_id: string
+  provider_id: string
+  provider_role: ProviderRole
+  rating: number
+  review_text: string
   created_at: string
   updated_at: string
 }
@@ -154,6 +173,114 @@ export class AppointmentsService {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }
+  }
+
+  private getReviewBaseUrl(): string {
+    return (
+      process.env.REVIEW_FRONTEND_URL ||
+      process.env.FRONTEND_URL ||
+      'https://hygieia-frontend.vercel.app'
+    )
+  }
+
+  private buildReviewLink(appointmentId: string, providerRole: ProviderRole): string {
+    const base = this.getReviewBaseUrl().replace(/\/$/, '')
+    return `${base}/appointments/${appointmentId}/review?providerRole=${providerRole}`
+  }
+
+  private async createNotification(userId: string, message: string, title: string) {
+    const { error } = await this.supabase.from('notifications').insert([
+      {
+        user_id: userId,
+        notification_msg: message,
+        action: null,
+        title,
+      },
+    ])
+
+    if (error) {
+      this.logger(`FAILED TO CREATE NOTIFICATION FOR USER=${userId}, ERROR=${error.message}`)
+    }
+  }
+
+  private async resolveProviderRole(providerId: string): Promise<ProviderRole> {
+    const { data, error } = await this.supabase
+      .from('users')
+      .select('role')
+      .eq('id', providerId)
+      .single()
+
+    if (error || !data?.role) {
+      return 'doctor'
+    }
+
+    return data.role === 'nutritionist' ? 'nutritionist' : 'doctor'
+  }
+
+  private async resolveProviderName(providerId: string, providerRole: ProviderRole): Promise<string> {
+    if (providerRole === 'nutritionist') {
+      const nutritionist = await this.nut.findOne({ id: providerId }).lean()
+      return nutritionist?.name || 'Nutritionist'
+    }
+
+    const doctor = await this.doctorProfileModel.findOne({ id: providerId }).lean()
+    return doctor?.name || 'Doctor'
+  }
+
+  private async sendReviewRequestAfterCompletion(params: {
+    appointmentId: string
+    patientId: string
+    providerId: string
+    providerRole: ProviderRole
+    appointmentDate: string
+    appointmentTime: string
+    appointmentMode: string
+  }) {
+    const {
+      appointmentId,
+      patientId,
+      providerId,
+      providerRole,
+      appointmentDate,
+      appointmentTime,
+      appointmentMode,
+    } = params
+
+    const patient = await this.profileModel.findOne({ id: patientId }).lean()
+    const providerName = await this.resolveProviderName(providerId, providerRole)
+
+    const { data: userData, error: userError } = await this.supabase
+      .from('users')
+      .select('email')
+      .eq('id', patientId)
+      .single()
+
+    const reviewLink = this.buildReviewLink(appointmentId, providerRole)
+
+    await this.createNotification(
+      patientId,
+      `Your appointment is completed. Please share your review for ${providerName}.`,
+      'Share Appointment Review',
+    )
+
+    if (userError || !userData?.email) {
+      this.logger(`SKIPPING REVIEW REQUEST EMAIL FOR APPOINTMENT=${appointmentId}, EMAIL NOT FOUND`)
+      return
+    }
+
+    this.mailerClient.emit('appointment_review_request', {
+      appointment_id: appointmentId,
+      patient_id: patientId,
+      provider_id: providerId,
+      provider_role: providerRole,
+      patient_email: userData.email,
+      patient_name: patient?.name || 'Patient',
+      provider_name: providerName,
+      appointment_date: appointmentDate,
+      appointment_time: appointmentTime,
+      appointment_mode: appointmentMode,
+      review_link: reviewLink,
+    })
   }
 
   private toDb(dto: Partial<CreateAppointmentDto>): Partial<DbRow> {
@@ -819,6 +946,14 @@ async completeNutritionistAppointment(
   const appt = appointment as DbRow
   let dietPlanId: string | null = null
 
+  if (appt.doctor_id !== nutritionistId) {
+    throw new ForbiddenException('You are not authorized to complete this appointment')
+  }
+
+  if (appt.status === 'completed') {
+    throw new BadRequestException('Appointment is already completed')
+  }
+
   const tasks: Promise<any>[] = []
 
   if (dto.referredTestIds?.length) {
@@ -880,6 +1015,20 @@ async completeNutritionistAppointment(
   
   this.logger("APPOINTMENT STATUS UPDATED AND LINKED TO DIET PLAN (IF ANY)")
 
+  try {
+    await this.sendReviewRequestAfterCompletion({
+      appointmentId: id,
+      patientId: appt.patient_id,
+      providerId: nutritionistId,
+      providerRole: 'nutritionist',
+      appointmentDate: appt.date,
+      appointmentTime: appt.time,
+      appointmentMode: appt.mode,
+    })
+  } catch (error: any) {
+    this.logger(`FAILED TO SEND REVIEW REQUEST FOR APPOINTMENT=${id}: ${error?.message || error}`)
+  }
+
   return this.toApi(updated as DbRow)
 }
 
@@ -904,6 +1053,10 @@ async completeDoctorAppointment(
 
   if (appt.doctor_id !== doctorId) {
     throw new ForbiddenException('You are not authorized to complete this appointment')
+  }
+
+  if (appt.status === 'completed') {
+    throw new BadRequestException('Appointment is already completed')
   }
 
   const tasks: Promise<any>[] = []
@@ -970,7 +1123,239 @@ async completeDoctorAppointment(
 
   this.logger('APPOINTMENT COMPLETED BY DOCTOR FOR APPOINTMENT ID=' + id)
 
+  try {
+    await this.sendReviewRequestAfterCompletion({
+      appointmentId: id,
+      patientId: appt.patient_id,
+      providerId: doctorId,
+      providerRole: 'doctor',
+      appointmentDate: appt.date,
+      appointmentTime: appt.time,
+      appointmentMode: appt.mode,
+    })
+  } catch (error: any) {
+    this.logger(`FAILED TO SEND REVIEW REQUEST FOR APPOINTMENT=${id}: ${error?.message || error}`)
+  }
+
   return this.toApi(updated as DbRow)
+}
+
+async submitAppointmentReview(payload: SubmitAppointmentReviewDto) {
+  const { appointmentId, patientId } = payload
+  const rating = Number(payload.rating)
+  const reviewText = payload.review?.trim()
+
+  if (!reviewText) {
+    throw new BadRequestException('Review text is required')
+  }
+
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new BadRequestException('Rating must be an integer between 1 and 5')
+  }
+
+  const { data: appointment, error: appointmentError } = await this.supabase
+    .from('appointments')
+    .select('*')
+    .eq('id', appointmentId)
+    .single()
+
+  if (appointmentError?.message?.includes('No rows')) {
+    throw new NotFoundException('Appointment not found')
+  }
+  if (appointmentError) {
+    throw new BadRequestException(appointmentError.message)
+  }
+
+  const appt = appointment as DbRow
+
+  if (appt.patient_id !== patientId) {
+    throw new ForbiddenException('You are not allowed to review this appointment')
+  }
+
+  if (appt.status !== 'completed') {
+    throw new BadRequestException('Only completed appointments can be reviewed')
+  }
+
+  const providerId = appt.doctor_id
+  const providerRole: ProviderRole = appt.diet_plan_id
+    ? 'nutritionist'
+    : appt.prescription_id
+      ? 'doctor'
+      : await this.resolveProviderRole(providerId)
+
+  const { data: existing, error: existingError } = await this.supabase
+    .from('appointment_reviews')
+    .select('id')
+    .eq('appointment_id', appointmentId)
+    .maybeSingle()
+
+  if (existingError) {
+    throw new BadRequestException(existingError.message)
+  }
+
+  if (existing) {
+    throw new BadRequestException('This appointment has already been reviewed')
+  }
+
+  const { data: createdReview, error: insertError } = await this.supabase
+    .from('appointment_reviews')
+    .insert({
+      appointment_id: appointmentId,
+      patient_id: patientId,
+      provider_id: providerId,
+      provider_role: providerRole,
+      rating,
+      review_text: reviewText,
+    })
+    .select('*')
+    .single()
+
+  if (insertError?.message?.toLowerCase().includes('duplicate')) {
+    throw new BadRequestException('This appointment has already been reviewed')
+  }
+  if (insertError) {
+    throw new BadRequestException(insertError.message)
+  }
+
+  const { data: providerReviews, error: listError } = await this.supabase
+    .from('appointment_reviews')
+    .select('rating')
+    .eq('provider_id', providerId)
+    .eq('provider_role', providerRole)
+
+  if (listError) {
+    throw new BadRequestException(listError.message)
+  }
+
+  const ratings = (providerReviews || []).map((r: any) => Number(r.rating)).filter((r: number) => Number.isFinite(r))
+  const avgRating = ratings.length > 0 ? Number((ratings.reduce((sum: number, r: number) => sum + r, 0) / ratings.length).toFixed(2)) : 0
+
+  if (providerRole === 'nutritionist') {
+    await this.nut.updateOne({ id: providerId }, { $set: { rating: avgRating } }, { upsert: false })
+  } else {
+    await this.doctorProfileModel.updateOne({ id: providerId }, { $set: { rating: avgRating } }, { upsert: false })
+  }
+
+  const patient = await this.profileModel.findOne({ id: patientId }).lean()
+  const providerName = await this.resolveProviderName(providerId, providerRole)
+
+  const { data: patientUser } = await this.supabase
+    .from('users')
+    .select('email')
+    .eq('id', patientId)
+    .single()
+
+  await this.createNotification(
+    patientId,
+    `Thanks for your review. You rated ${providerName} ${rating}/5.`,
+    'Review Submitted',
+  )
+
+  await this.createNotification(
+    providerId,
+    `You received a new ${rating}/5 review from a patient.`,
+    'New Appointment Review',
+  )
+
+  if (patientUser?.email) {
+    this.mailerClient.emit('appointment_review_submitted', {
+      appointment_id: appointmentId,
+      patient_id: patientId,
+      provider_id: providerId,
+      provider_role: providerRole,
+      patient_email: patientUser.email,
+      patient_name: patient?.name || 'Patient',
+      provider_name: providerName,
+      appointment_date: appt.date,
+      appointment_time: appt.time,
+      appointment_mode: appt.mode,
+      rating,
+      review_text: reviewText,
+    })
+  }
+
+  const review = createdReview as AppointmentReviewDbRow
+
+  return {
+    success: true,
+    message: 'Review submitted successfully',
+    data: {
+      id: review.id,
+      appointmentId: review.appointment_id,
+      patientId: review.patient_id,
+      providerId: review.provider_id,
+      providerRole: review.provider_role,
+      rating: review.rating,
+      review: review.review_text,
+      createdAt: review.created_at,
+    },
+    provider: {
+      id: providerId,
+      role: providerRole,
+      rating: avgRating,
+      totalReviews: ratings.length,
+    },
+  }
+}
+
+async getProviderReviews(query: GetProviderReviewsDto) {
+  if (!query.providerId) {
+    throw new BadRequestException('providerId is required')
+  }
+
+  const limit = Number(query.limit ?? 20)
+  const offset = Number(query.offset ?? 0)
+
+  if (!Number.isFinite(limit) || limit < 1) {
+    throw new BadRequestException('limit must be greater than or equal to 1')
+  }
+
+  if (!Number.isFinite(offset) || offset < 0) {
+    throw new BadRequestException('offset must be greater than or equal to 0')
+  }
+
+  let dbQuery = this.supabase
+    .from('appointment_reviews')
+    .select('*', { count: 'exact' })
+    .eq('provider_id', query.providerId)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (query.role) {
+    dbQuery = dbQuery.eq('provider_role', query.role)
+  }
+
+  const { data, error, count } = await dbQuery
+
+  if (error) {
+    throw new BadRequestException(error.message)
+  }
+
+  const rows = (data || []) as AppointmentReviewDbRow[]
+
+  const items = await Promise.all(
+    rows.map(async (row) => {
+      const patient = await this.profileModel.findOne({ id: row.patient_id }).lean()
+      return {
+        id: row.id,
+        appointmentId: row.appointment_id,
+        patientId: row.patient_id,
+        patientName: patient?.name || 'Patient',
+        providerId: row.provider_id,
+        providerRole: row.provider_role,
+        rating: row.rating,
+        review: row.review_text,
+        createdAt: row.created_at,
+      }
+    }),
+  )
+
+  return {
+    items,
+    count: count ?? 0,
+    limit,
+    offset,
+  }
 }
 
 async getAssignedPrescriptions(doctorId: string) {

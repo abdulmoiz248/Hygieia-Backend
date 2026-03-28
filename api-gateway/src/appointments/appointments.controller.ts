@@ -10,7 +10,10 @@ import { AvailableSlotsQueryDto } from './dto/available-slots.dto'
 import { CancelAppointmentDto } from './dto/cancel-appointment.dto'
 import { MedicationTakenDto } from './dto/medication-taken.dto'
 import { MedicationLogsQueryDto } from './dto/medication-logs-query.dto'
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { SubmitAppointmentReviewDto } from './dto/submit-appointment-review.dto'
+import { GetProviderReviewsDto } from './dto/get-provider-reviews.dto'
+import { GetProviderReviewsResponseDto, SubmitAppointmentReviewResponseDto } from './dto/review-response.dto'
+import { ApiBody, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 
 @ApiTags('Appointments')
 @Controller('appointments')
@@ -291,6 +294,54 @@ async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
     return firstValueFrom(
       this.client.send({ cmd: 'cancel_appointment' }, { id, dto, nutritionistId })
     )
+  }
+
+  @Post(':id/review')
+  @ApiOperation({
+    summary: 'Submit appointment review',
+    description:
+      'Allows the patient to submit one review for a completed appointment. Also updates provider rating and triggers review notifications.',
+  })
+  @ApiParam({ name: 'id', description: 'Appointment ID (UUID)' })
+  @ApiBody({ type: SubmitAppointmentReviewDto })
+  @ApiOkResponse({
+    description: 'Review submitted successfully',
+    type: SubmitAppointmentReviewResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid review payload or appointment already reviewed' })
+  @ApiResponse({ status: 403, description: 'Patient is not allowed to review this appointment' })
+  @ApiResponse({ status: 404, description: 'Appointment not found' })
+  submitAppointmentReview(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: SubmitAppointmentReviewDto,
+  ) {
+    return this.client.send(
+      { cmd: 'submit_appointment_review' },
+      {
+        appointmentId: id,
+        patientId: body.patientId,
+        rating: body.rating,
+        review: body.review,
+      },
+    )
+  }
+
+  @Get('reviews/provider')
+  @ApiOperation({
+    summary: 'Get doctor/nutritionist reviews',
+    description: 'Fetches paginated reviews for a provider by provider ID and optional role filter.',
+  })
+  @ApiQuery({ name: 'providerId', required: true, description: 'Provider ID (UUID)' })
+  @ApiQuery({ name: 'role', required: false, enum: ['doctor', 'nutritionist'] })
+  @ApiQuery({ name: 'limit', required: false, description: 'Pagination limit, default 20' })
+  @ApiQuery({ name: 'offset', required: false, description: 'Pagination offset, default 0' })
+  @ApiOkResponse({
+    description: 'Provider reviews fetched successfully',
+    type: GetProviderReviewsResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid query params' })
+  getProviderReviews(@Query() query: GetProviderReviewsDto) {
+    return this.client.send({ cmd: 'get_provider_reviews' }, query)
   }
 
    

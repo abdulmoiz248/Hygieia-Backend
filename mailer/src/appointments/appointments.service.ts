@@ -8,6 +8,10 @@ import { AppointmentCancellationDto } from 'src/appointments/dto/appointment-can
 import { generateAppointmentCancellationEmail } from 'src/helpers/generateAppointmentCancellationEmail';
 import { AppointmentUpdateDto } from 'src/appointments/dto/appointment-update.dto';
 import { generateAppointmentUpdateEmail } from 'src/helpers/generateAppointmentUpdateEmail';
+import { AppointmentReviewRequestDto } from 'src/appointments/dto/appointment-review-request.dto';
+import { AppointmentReviewSubmittedDto } from 'src/appointments/dto/appointment-review-submitted.dto';
+import { generateAppointmentReviewRequestEmail } from 'src/helpers/generateAppointmentReviewRequestEmail';
+import { generateAppointmentReviewSubmittedEmail } from 'src/helpers/generateAppointmentReviewSubmittedEmail';
 
 @Injectable()
 export class AppointmentsService {
@@ -59,4 +63,22 @@ async handleAppointmentUpdate(data: AppointmentUpdateDto) {
             generateAppointmentUpdateEmail(data)
         );
   }
+
+async handleAppointmentReviewRequest(data: AppointmentReviewRequestDto) {
+     console.log('Handling appointment review request email in AppointmentsService:', data);
+                await this.mailService.sendMail(
+                        data.patient_email,
+                        'Please review your appointment',
+                        generateAppointmentReviewRequestEmail(data)
+                );
+    }
+
+async handleAppointmentReviewSubmitted(data: AppointmentReviewSubmittedDto) {
+     console.log('Handling appointment review submitted copy email in AppointmentsService:', data);
+                await this.mailService.sendMail(
+                        data.patient_email,
+                        'Copy of your appointment review',
+                        generateAppointmentReviewSubmittedEmail(data)
+                );
+    }
 }

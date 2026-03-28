@@ -9,6 +9,9 @@ import { AvailableSlotsQueryDto } from './dto/available-slots.dto'
 import { CancelAppointmentDto } from './dto/cancel-appointment.dto'
 import { MedicationTakenDto } from './dto/medication-taken.dto'
 import { MedicationLogsQueryDto } from './dto/medication-logs-query.dto'
+import { CompleteDoctorAppointmentDto } from './dto/complete-doctor-appointment.dto'
+import { SubmitAppointmentReviewDto } from './dto/submit-appointment-review.dto'
+import { GetProviderReviewsDto } from './dto/get-provider-reviews.dto'
 
 @Controller()
 export class AppointmentsController {
@@ -110,9 +113,19 @@ getAvailableSlots(@Payload() payload:AvailableSlotsQueryDto) {
   @MessagePattern({ cmd: 'complete_doctor_appointment' })
   completeDoctorAppointment(
     @Payload()
-    payload: { id: string; dto: any; doctorId: string },
+    payload: { id: string; dto: CompleteDoctorAppointmentDto; doctorId: string },
   ) {
     return this.svc.completeDoctorAppointment(payload.id, payload.dto, payload.doctorId)
+  }
+
+  @MessagePattern({ cmd: 'submit_appointment_review' })
+  submitAppointmentReview(@Payload() payload: SubmitAppointmentReviewDto) {
+    return this.svc.submitAppointmentReview(payload)
+  }
+
+  @MessagePattern({ cmd: 'get_provider_reviews' })
+  getProviderReviews(@Payload() query: GetProviderReviewsDto) {
+    return this.svc.getProviderReviews(query)
   }
 
   @MessagePattern({ cmd: 'get_assigned_prescriptions' })

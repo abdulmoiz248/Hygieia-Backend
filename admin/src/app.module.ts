@@ -6,6 +6,7 @@ import { FaqModule } from './faq/faq.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { BlogpostModule } from './blogpost/blogpost.module';
+import { AnnouncementModule } from './announcement/announcement.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { BlogpostModule } from './blogpost/blogpost.module';
     FaqModule,
     NewsletterModule,
     BlogpostModule,
+    AnnouncementModule,
   ],
   controllers: [AppController],
   providers: [AppService],

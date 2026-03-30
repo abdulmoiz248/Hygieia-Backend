@@ -368,7 +368,6 @@ async handleAppointmentCancellation(data: AppointmentCancellationDto) {
   this.logger.log(`Cancellation notifications sent for appointment ${appointment_id}`)
 }
 
-
   private async createNotification(userId: string, message: string,title?: string) {
     const { error } = await this.supabase.from('notifications').insert([
       {

@@ -23,6 +23,7 @@ import { FaqModule } from './faq/faq.module';
 import { RagModule } from './rag/rag.module';
 import { CronTestModule } from './cron-test/cron-test.module';
 import { AnnouncementModule } from './announcement/announcement.module';
+import { WorkerReportModule } from './worker-report/worker-report.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { AnnouncementModule } from './announcement/announcement.module';
     RagModule,
     CronTestModule,
     AnnouncementModule,
+    WorkerReportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

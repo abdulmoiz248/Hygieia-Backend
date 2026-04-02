@@ -12,10 +12,16 @@ export class NewsletterService {
       this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')!,
     )}
 
-   async subscribe(email: string) {
-     const { data, error } = await this.supabase.from('newsletter').insert({ email })
-     if (error) throw new BadRequestException(error.message)
-     this.mailerClient.emit('welcome-newsletter-email', { email })
-     return data
+  async subscribe(email: string) {
+    const { data, error } = await this.supabase.from('newsletter').insert({ email });
+    if (error) throw new BadRequestException(error.message);
+    this.mailerClient.emit('welcome-newsletter-email', { email });
+    return data;
+  }
+
+  async findAll() {
+    const { data, error } = await this.supabase.from('newsletter').select('*');
+    if (error) throw new BadRequestException(error.message);
+    return data;
   }
 }

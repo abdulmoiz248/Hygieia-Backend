@@ -2,6 +2,7 @@ import {
   Controller, 
   Inject, 
   Post, 
+  Get,
   Body, 
   UnauthorizedException,
   BadRequestException 
@@ -59,6 +60,36 @@ export class NewsletterController {
       );
     } catch (e: any) {
       throw new BadRequestException(e?.message || 'Newsletter subscription failed');
+    }
+  }
+
+  @Get('subscribers')
+  @ApiOperation({
+    summary: 'Get all newsletter subscribers',
+    description: 'Retrieve a list of all newsletter subscribers',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved all subscribers',
+    schema: {
+      example: [
+        {
+          id: 'uuid',
+          email: 'subscriber@example.com',
+          created_at: '2024-01-01T00:00:00Z',
+        },
+      ],
+    },
+  })
+  async getAllSubscribers() {
+    try {
+      return await firstValueFrom(
+        this.authClient.send({ cmd: 'allNewsletterSubscribers' }, {})
+      );
+    } catch (e: any) {
+      throw new BadRequestException(
+        e?.message || 'Failed to retrieve newsletter subscribers'
+      );
     }
   }
 

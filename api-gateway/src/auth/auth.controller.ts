@@ -415,6 +415,31 @@ export class AuthController {
     }
   }
 
+  @Post('resend-password-reset-otp')
+  @ApiOperation({
+    summary: 'Resend password reset OTP',
+    description: 'Resend a password reset OTP to the user email and update the stored OTP in the users table.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset OTP resent successfully',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Password reset OTP resent to your email',
+        data: { success: true },
+        success: true,
+      },
+    },
+  })
+  async resendPasswordResetOtp(@Body() requestPasswordResetDto: RequestPasswordResetDto) {
+    try {
+      return await firstValueFrom(this.authClient.send({ cmd: 'resend-password-reset-otp' }, requestPasswordResetDto))
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'resend password reset otp failed')
+    }
+  }
+
 
   @Post('verify-reset-otp')
   @ApiOperation({ 

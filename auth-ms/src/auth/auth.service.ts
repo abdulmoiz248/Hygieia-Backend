@@ -591,6 +591,42 @@ export class AuthService {
     return { message: 'Password reset OTP sent to your email', success: true }
   }
 
+  async resendPasswordResetOtp(email: string) {
+    console.log(`[INFO: AUTH SERVICE] Resending password reset OTP for ${email}`)
+
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+
+    const { data: existingUser } = await this.supabase.getClient()
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single()
+
+    if (!existingUser) {
+      console.error(`[INFO: AUTH SERVICE] No such user found for password reset OTP resend: ${email}`)
+      return { message: 'If an account exists with this email, a password reset OTP has been sent', success: true }
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString()
+
+    const { error } = await this.supabase.getClient()
+      .from('users')
+      .update({ otp })
+      .eq('email', email)
+
+    if (error) {
+      console.error(`[INFO: AUTH SERVICE] Failed to update password reset OTP for ${email}: ${error.message}`)
+      throw new BadRequestException('Failed to resend password reset OTP. Please try again')
+    }
+
+    console.log(`[INFO: AUTH SERVICE] OTP updated for password reset resend for ${email} otp: ${otp}`)
+
+    await this.sendOtpEmail(email, otp, true)
+    return { message: 'Password reset OTP resent to your email', success: true }
+  }
+
   async resetPassword(email: string, otp: string, newPassword: string) {
     console.log(`[INFO: AUTH SERVICE] Resetting password for ${email}`)
     

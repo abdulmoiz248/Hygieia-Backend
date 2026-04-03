@@ -183,6 +183,17 @@ async googleCallback(@Req() req, @Res() res: Response) {
     }
   }
 
+  @MessagePattern({ cmd: 'resend-password-reset-otp' })
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async resendPasswordResetOtpMs(data: RequestPasswordResetDto) {
+    try {
+      const result = await this.auth.resendPasswordResetOtp(data.email)
+      return createSuccessResponse(result.message, result, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'Password reset OTP resend failed', error.detail, error.status || 400)
+    }
+  }
+
   @MessagePattern({ cmd: 'verify-reset-otp' })
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async VerifyResetOtp(data: VerifyOtpDto) {

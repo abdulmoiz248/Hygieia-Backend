@@ -8,6 +8,7 @@ import { RegisterDto } from './dto/register.dto'
 import { RegisterWorkerDto } from './dto/register-worker.dto'
 import { LoginDto } from './dto/login.dto'
 import { VerifyOtpDto } from './dto/verify-otp.dto'
+import { ResendOtpDto } from './dto/resend-otp.dto'
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto'
 import { ResetPasswordDto } from './dto/reset-password.dto'
 import { UpsertUserProfileDto } from './dto/upsert-user-profile.dto'
@@ -145,6 +146,17 @@ async googleCallback(@Req() req, @Res() res: Response) {
       return createSuccessResponse(result.message, result, 200)
     } catch (error: any) {
       return createErrorResponse(error.message || 'OTP verification failed', error.detail, error.status || 400)
+    }
+  }
+
+  @MessagePattern({ cmd: 'resend-otp' })
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async resendOtpMs(data: ResendOtpDto) {
+    try {
+      const result = await this.auth.resendOtp(data.email)
+      return createSuccessResponse(result.message, result, 200)
+    } catch (error: any) {
+      return createErrorResponse(error.message || 'OTP resend failed', error.detail, error.status || 400)
     }
   }
 

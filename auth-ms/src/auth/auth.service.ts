@@ -459,6 +459,46 @@ export class AuthService {
     return { success: true, message: 'Email verified successfully' }
   }
 
+  async resendOtp(email: string) {
+    console.log(`[INFO: AUTH SERVICE] Resending OTP for ${email}`)
+
+    if (!this.isValidEmail(email)) {
+      throw new BadRequestException('Invalid email format')
+    }
+
+    const { data: user, error } = await this.supabase.getClient()
+      .from('users')
+      .select('id, email, is_verified')
+      .eq('email', email)
+      .single()
+
+    if (error || !user) {
+      console.error(`[INFO: AUTH SERVICE] User not found for resend OTP: ${email}`)
+      throw new UnauthorizedException('Email not found in our system')
+    }
+
+    if (user.is_verified) {
+      throw new BadRequestException('Account is already verified')
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString()
+
+    const { error: updateError } = await this.supabase.getClient()
+      .from('users')
+      .update({ otp })
+      .eq('email', email)
+
+    if (updateError) {
+      console.error(`[INFO: AUTH SERVICE] Failed to update OTP for ${email}: ${updateError.message}`)
+      throw new BadRequestException('Failed to resend OTP. Please try again')
+    }
+
+    await this.sendOtpEmail(email, otp, false)
+
+    console.log(`[INFO: AUTH SERVICE] OTP resent successfully for ${email}`)
+    return { success: true, message: 'OTP resent successfully' }
+  }
+
   async validateUser(email: string, pass: string) {
     console.log(`[INFO: AUTH SERVICE] Validating user ${email}`)
     

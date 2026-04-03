@@ -20,6 +20,7 @@ import { RegisterDto } from './dto/register.dto'
 import { RegisterWorkerDto } from './dto/register-worker.dto'
 import { LoginDto } from './dto/login.dto'
 import { VerifyOtpDto } from './dto/verify-otp.dto'
+import { ResendOtpDto } from './dto/resend-otp.dto'
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto'
 import { ResetPasswordDto } from './dto/reset-password.dto'
 import { UpsertUserProfileDto } from './dto/upsert-user-profile.dto'
@@ -319,6 +320,31 @@ export class AuthController {
     } catch (e: any) {
       console.log(e)
       throw new BadRequestException(e?.message || 'otp verification failed')
+    }
+  }
+
+  @Post('resend-otp')
+  @ApiOperation({
+    summary: 'Resend email verification OTP',
+    description: 'Resend a new OTP to the user email and update the stored OTP in the users table.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP resent successfully',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'OTP resent successfully',
+        data: { success: true },
+        success: true,
+      },
+    },
+  })
+  async resendOtp(@Body() resendOtpDto: ResendOtpDto) {
+    try {
+      return await firstValueFrom(this.authClient.send({ cmd: 'resend-otp' }, resendOtpDto))
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'resend otp failed')
     }
   }
 

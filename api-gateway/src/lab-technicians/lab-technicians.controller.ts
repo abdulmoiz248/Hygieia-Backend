@@ -25,6 +25,7 @@ export class LabTechniciansController {
           img: 'image_url',
           gender: 'Male',
           dateofbirth: '1990-01-01',
+          email: 'labtech@hygieia.com',
           personal_email: 'smith@example.com',
         },
       ],

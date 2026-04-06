@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 
@@ -14,14 +14,28 @@ export class LabTechniciansService {
   }
 
   async findAll() {
-    const { data, error } = await this.supabase
-      .from('lab_technician_profiles')
-      .select('*');
+    const [{ data, error }, { data: users, error: usersError }] = await Promise.all([
+      this.supabase
+        .from('lab_technician_profiles')
+        .select('*'),
+      this.supabase
+        .from('users')
+        .select('id, email'),
+    ])
 
     if (error) {
       throw new Error(`Failed to fetch lab technicians: ${error.message}`);
     }
 
-    return data;
+    if (usersError) {
+      throw new Error(`Failed to fetch lab technician emails: ${usersError.message}`);
+    }
+
+    const emailById = new Map((users ?? []).map((user) => [user.id, user.email]))
+
+    return (data ?? []).map((labTechnician) => ({
+      ...labTechnician,
+      email: emailById.get(String(labTechnician.id)) ?? '',
+    }));
   }
 }

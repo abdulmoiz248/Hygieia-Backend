@@ -1396,11 +1396,54 @@ async getActivePrescriptionsForPatient(patientId: string) {
   if (error) throw new BadRequestException(error.message)
   if (!data) return []
 
+  const pakistanDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Karachi',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+  const todayPkStartUtc = new Date(`${pakistanDate}T00:00:00+05:00`).toISOString()
+  const todayPkEndUtc = new Date(`${pakistanDate}T23:59:59.999+05:00`).toISOString()
+
+  const { data: todayTakenLogs, error: todayTakenLogsError } = await this.supabase
+    .from('medication_adherence_logs')
+    .select('prescription_id, medication_id')
+    .eq('patient_id', patientId)
+    .eq('taken', true)
+    .gte('taken_at', todayPkStartUtc)
+    .lte('taken_at', todayPkEndUtc)
+
+  if (todayTakenLogsError) {
+    throw new BadRequestException(todayTakenLogsError.message)
+  }
+
+  const todayTakenKeys = new Set(
+    ((todayTakenLogs as Array<{ prescription_id: string; medication_id: string }>) || []).map((log) =>
+      `${log.prescription_id}|${(log.medication_id || '').toString().trim()}`,
+    ),
+  )
+
+  this.logger(
+    `ACTIVE PRESCRIPTIONS TAKEN-FLAG patient=${patientId} pakistanDate=${pakistanDate} takenTodayCount=${todayTakenKeys.size}`,
+  )
+
   const enriched = await Promise.all(
     (data as PrescriptionRow[]).map(async (row) => {
       const doctor = await this.doctorProfileModel.findOne({ id: row.doctor_id }).lean()
+      const medications = Array.isArray(row.medications) ? row.medications : []
+      const medicationsWithTakenFlag = medications.map((medication) => {
+        const medicationId = this.getMedicationIdentifier(medication)
+        if (!medicationId) return { ...medication, taken: false }
+        const takenKey = `${row.id}|${medicationId}`
+        return {
+          ...medication,
+          taken: todayTakenKeys.has(takenKey),
+        }
+      })
+
       return {
         ...row,
+        medications: medicationsWithTakenFlag,
         doctorName: doctor?.name || '',
       }
     }),
@@ -1512,8 +1555,21 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
     throw new BadRequestException('patientId, prescriptionId and medicationId are required')
   }
 
-  const takenAtDate = new Date(payload.takenAt)
+  if (payload.taken !== true) {
+    throw new BadRequestException('Only taken=true is supported for medication tracking')
+  }
+
+  const medicationId = payload.medicationId.toString().trim()
+  if (!medicationId) {
+    throw new BadRequestException('medicationId is required')
+  }
+
+  const resolvedTakenAt = payload.takenAt ?? new Date().toISOString()
+  const takenAtDate = new Date(resolvedTakenAt)
   if (Number.isNaN(takenAtDate.getTime())) {
+    this.logger(
+      `SAVE MEDICATION TAKEN INVALID_TIMESTAMP patient=${payload.patientId} prescription=${payload.prescriptionId} medication=${medicationId} takenAt=${resolvedTakenAt}`,
+    )
     throw new BadRequestException('Invalid takenAt timestamp')
   }
 
@@ -1525,9 +1581,13 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
     .single()
 
   if (prescriptionError?.message?.includes('No rows')) {
+    this.logger(
+      `SAVE MEDICATION TAKEN PRESCRIPTION_NOT_FOUND patient=${payload.patientId} prescription=${payload.prescriptionId}`,
+    )
     throw new NotFoundException('Prescription not found for patient')
   }
   if (prescriptionError) {
+    this.logger(`SAVE MEDICATION TAKEN PRESCRIPTION_QUERY_FAILED reason=${prescriptionError.message}`)
     throw new BadRequestException(prescriptionError.message)
   }
 
@@ -1539,10 +1599,13 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
     const idCandidates = [med.id, med.medicationId, med.medication_id, med.name]
       .filter(Boolean)
       .map((value: any) => value.toString())
-    return idCandidates.includes(payload.medicationId)
+    return idCandidates.includes(medicationId)
   })
 
   if (!medicationExists) {
+    this.logger(
+      `SAVE MEDICATION TAKEN MEDICATION_NOT_FOUND patient=${payload.patientId} prescription=${payload.prescriptionId} medication=${medicationId}`,
+    )
     throw new NotFoundException('Medication not found in prescription')
   }
 
@@ -1551,7 +1614,7 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
   const upsertPayload = {
     patient_id: payload.patientId,
     prescription_id: payload.prescriptionId,
-    medication_id: payload.medicationId,
+    medication_id: medicationId,
     taken: payload.taken,
     taken_at: takenAtDate.toISOString(),
     scheduled_time: payload.scheduledTime ?? null,
@@ -1559,14 +1622,21 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
     updated_at: new Date().toISOString(),
   }
 
-  const { data: inserted, error: insertError } = await this.supabase
+  const { data: savedRow, error: insertError } = await this.supabase
     .from('medication_adherence_logs')
-    .insert(upsertPayload)
+    .upsert(upsertPayload, {
+      onConflict: 'patient_id,prescription_id,medication_id,taken_date',
+    })
     .select('*')
     .single()
 
-  if (insertError) throw new BadRequestException(insertError.message)
-  const saved = inserted as MedicationAdherenceRow
+  if (insertError) {
+    this.logger(
+      `SAVE MEDICATION TAKEN UPSERT_FAILED patient=${payload.patientId} prescription=${payload.prescriptionId} medication=${medicationId} reason=${insertError.message}`,
+    )
+    throw new BadRequestException(insertError.message)
+  }
+  const saved = savedRow as MedicationAdherenceRow
 
   try {
     await this.refreshPatientAdherenceMetrics(payload.patientId)
@@ -1585,6 +1655,7 @@ async saveMedicationTaken(payload: MedicationTakenDto) {
       taken: saved.taken,
       takenAt: saved.taken_at,
       scheduledTime: saved.scheduled_time,
+      source: saved.source,
       date: dateKey,
     },
   }

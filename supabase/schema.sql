@@ -30,7 +30,6 @@ CREATE TYPE "public"."appointment_cancelled_by" AS ENUM (
 
 ALTER TYPE "public"."appointment_cancelled_by" OWNER TO "postgres";
 
-
 CREATE TYPE "public"."prescription_status" AS ENUM (
     'active',
     'completed'
@@ -38,7 +37,6 @@ CREATE TYPE "public"."prescription_status" AS ENUM (
 
 
 ALTER TYPE "public"."prescription_status" OWNER TO "postgres";
-
 
 CREATE TYPE "public"."user_role" AS ENUM (
     'patient',
@@ -67,7 +65,7 @@ ALTER FUNCTION "public"."set_updated_at"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigger"
     LANGUAGE "plpgsql"
-    AS $$
+        AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
@@ -313,6 +311,10 @@ CREATE TABLE IF NOT EXISTS "public"."medication_adherence_logs" (
 
 
 ALTER TABLE "public"."medication_adherence_logs" OWNER TO "postgres";
+
+
+CREATE UNIQUE INDEX "medication_adherence_unique_patient_prescription_medication_day" ON "public"."medication_adherence_logs" USING "btree" ("patient_id", "prescription_id", "medication_id", "taken_date");
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."newsletter" (

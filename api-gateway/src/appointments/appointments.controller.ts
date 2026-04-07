@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Inject, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Logger, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query, UsePipes, ValidationPipe } from '@nestjs/common'
 import { ClientProxy } from '@nestjs/microservices'
 import { CreateAppointmentDto } from './dto/create-appointment.dto'
 import { UpdateAppointmentDto } from './dto/update-appointment.dto'
@@ -18,6 +18,8 @@ import { ApiBody, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiResponse, 
 @ApiTags('Appointments')
 @Controller('appointments')
 export class AppointmentsController {
+  private readonly logger = new Logger(AppointmentsController.name)
+
   constructor(
     @Inject('APPOINTMENTS_SERVICE') private readonly client: ClientProxy,
   ) {}
@@ -177,8 +179,17 @@ async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
   })
   @ApiParam({ name: 'patientId', description: 'Patient user ID (UUID)' })
   @ApiResponse({ status: 200, description: 'Active prescriptions fetched successfully' })
-  getActivePrescriptionsForPatient(@Param('patientId') patientId: string) {
-    return this.client.send({ cmd: 'get_active_prescriptions_for_patient' }, patientId)
+  async getActivePrescriptionsForPatient(@Param('patientId') patientId: string) {
+    this.logger.log(`GET ACTIVE PRESCRIPTIONS request patientId=${patientId}`)
+    try {
+      const response = await firstValueFrom(this.client.send({ cmd: 'get_active_prescriptions_for_patient' }, patientId))
+      this.logger.log(`GET ACTIVE PRESCRIPTIONS success patientId=${patientId}`)
+      return response
+    } catch (e: any) {
+      const msg = e?.message || e?.error || 'Failed to fetch active prescriptions'
+      this.logger.error(`GET ACTIVE PRESCRIPTIONS failed patientId=${patientId} reason=${msg}`, e?.stack)
+      throw new BadRequestException(msg)
+    }
   }
 
   @Patch('prescriptions/:id')
@@ -242,7 +253,7 @@ async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
         patientId: { type: 'string', format: 'uuid' },
         prescriptionId: { type: 'string', format: 'uuid' },
         medicationId: { type: 'string', example: 'med-1' },
-        taken: { type: 'boolean' },
+        taken: { type: 'boolean', enum: [true], example: true },
         takenAt: { type: 'string', format: 'date-time' },
         scheduledTime: { type: 'string', example: '08:00 AM' },
         source: { type: 'string', example: 'patient-web' },
@@ -252,11 +263,23 @@ async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
   @ApiResponse({ status: 200, description: 'Medication status saved' })
   @ApiResponse({ status: 400, description: 'Invalid payload' })
   @ApiResponse({ status: 404, description: 'Prescription or medication not found for patient' })
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   async saveMedicationTaken(@Body() body: MedicationTakenDto) {
+    this.logger.log(
+      `SAVE MEDICATION TAKEN request patientId=${body.patientId} prescriptionId=${body.prescriptionId} medicationId=${body.medicationId} taken=${body.taken} takenAt=${body.takenAt ?? 'auto-now'}`,
+    )
     try {
-      return await firstValueFrom(this.client.send({ cmd: 'save_medication_taken' }, body))
+      const response = await firstValueFrom(this.client.send({ cmd: 'save_medication_taken' }, body))
+      this.logger.log(
+        `SAVE MEDICATION TAKEN success patientId=${body.patientId} prescriptionId=${body.prescriptionId} medicationId=${body.medicationId}`,
+      )
+      return response
     } catch (e: any) {
       const msg = e?.message || e?.error || 'Failed to save medication status'
+      this.logger.error(
+        `SAVE MEDICATION TAKEN failed patientId=${body.patientId} prescriptionId=${body.prescriptionId} medicationId=${body.medicationId} reason=${msg}`,
+        e?.stack,
+      )
       if (typeof msg === 'string' && msg.toLowerCase().includes('not found')) {
         throw new NotFoundException(msg)
       }

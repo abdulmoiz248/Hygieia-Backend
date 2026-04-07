@@ -1,4 +1,4 @@
-import { IsBoolean, IsISO8601, IsOptional, IsString, IsUUID } from 'class-validator'
+import { Equals, IsBoolean, IsISO8601, IsOptional, IsString, IsUUID } from 'class-validator'
 
 export class MedicationTakenDto {
   @IsUUID()
@@ -11,10 +11,12 @@ export class MedicationTakenDto {
   medicationId: string
 
   @IsBoolean()
+  @Equals(true)
   taken: boolean
 
+  @IsOptional()
   @IsISO8601()
-  takenAt: string
+  takenAt?: string
 
   @IsOptional()
   @IsString()

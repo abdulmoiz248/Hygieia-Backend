@@ -27,6 +27,7 @@ services:
       - REDIS_HOST=bullmq-redis
       - API_GATEWAY_HOST=api-gateway
       - EMBEDDINGS_SERVICE_URL=http://embeddings:4008
+      - RECOMMENDATIONS_SERVICE_URL=http://recommendations:4012
     depends_on:
       - auth-ms
       - appointments
@@ -178,6 +179,22 @@ services:
       - PORT=4008
     volumes:
       - ./embeddings/cvs:/app/cvs
+    networks:
+      - hygieia-network
+
+  recommendations:
+    build:
+      context: ./recommendations
+      dockerfile: Dockerfile
+      args:
+        PORT: 4012
+    container_name: recommendations
+    ports:
+      - "4012:4012"
+    env_file:
+      - ./recommendations/.env
+    environment:
+      - PORT=4012
     networks:
       - hygieia-network
 

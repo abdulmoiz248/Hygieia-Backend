@@ -25,6 +25,7 @@ import { CronTestModule } from './cron-test/cron-test.module';
 import { AnnouncementModule } from './announcement/announcement.module';
 import { WorkerReportModule } from './worker-report/worker-report.module';
 import { LabTechniciansModule } from './lab-technicians/lab-technicians.module';
+import { RecommendationsModule } from './recommendations/recommendations.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { LabTechniciansModule } from './lab-technicians/lab-technicians.module';
     AnnouncementModule,
     WorkerReportModule,
     LabTechniciansModule,
+    RecommendationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

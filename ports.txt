@@ -10,5 +10,6 @@ Embeddings = 4008
 Scheduler = 4009
 Mailer = 4010
 Admin = 4011
+Recommendations = 4012
 docker run -d --hostname my-rabbit --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 docker run -d --name bullmq-redis -p 6379:6379 redis:7

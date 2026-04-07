@@ -95,29 +95,70 @@ Design requirements:
       .map((row) => row.email)
       .filter((email): email is string => Boolean(email));
 
+    const resolvedSubject = subject?.trim() || 'Hygieia Newsletter';
+
     if (!emails.length) {
-      return {
+      const result = {
         success: false,
         message: 'No newsletter subscribers found',
         recipientCount: 0,
       };
+
+      await this.logSentNewsletter({
+        type: 'manual',
+        subject: resolvedSubject,
+        html,
+        recipientCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+        status: 'no_recipients',
+      });
+
+      return result;
     }
 
-    const mailerResult = await firstValueFrom(
-      this.mailerClient.send(
-        { cmd: 'send-newsletter-bulk' },
-        {
-          emails,
-          html,
-          subject: subject?.trim() || 'Hygieia Newsletter',
-        },
-      ),
-    );
+    try {
+      const mailerResult = await firstValueFrom(
+        this.mailerClient.send(
+          { cmd: 'send-newsletter-bulk' },
+          {
+            emails,
+            html,
+            subject: resolvedSubject,
+          },
+        ),
+      );
 
-    return {
-      ...mailerResult,
-      recipientCount: emails.length,
-    };
+      const result = {
+        ...mailerResult,
+        recipientCount: emails.length,
+      };
+
+      await this.logSentNewsletter({
+        type: 'manual',
+        subject: resolvedSubject,
+        html,
+        recipientCount: emails.length,
+        sentCount: this.toNumber(mailerResult?.sentCount),
+        failedCount: this.toNumber(mailerResult?.failedCount),
+        status: 'sent',
+      });
+
+      return result;
+    } catch (error) {
+      await this.logSentNewsletter({
+        type: 'manual',
+        subject: resolvedSubject,
+        html,
+        recipientCount: emails.length,
+        sentCount: 0,
+        failedCount: emails.length,
+        status: 'failed',
+        error: this.errorMessage(error),
+      });
+
+      throw new InternalServerErrorException('Newsletter send failed');
+    }
   }
 
   private extractText(response: unknown): string {
@@ -235,7 +276,7 @@ Design requirements:
       .filter((email): email is string => Boolean(email));
 
     if (!emails.length) {
-      return {
+      const result = {
         success: false,
         message: 'No newsletter subscribers found',
         recipientCount: 0,
@@ -244,33 +285,157 @@ Design requirements:
           title: blogpost.title,
         },
       };
+
+      await this.logSentNewsletter({
+        type: 'blogpost',
+        subject: `${blogpost.title} - Hygieia Blog`,
+        html,
+        blogpostId: blogpost.id,
+        newsletterLink: `https://hygieia-frontend.vercel.app/blogs/${blogpost.id}`,
+        recipientCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+        status: 'no_recipients',
+      });
+
+      return result;
     }
 
     const subject = `${blogpost.title} - Hygieia Blog`;
+    const newsletterLink = `https://hygieia-frontend.vercel.app/blogs/${blogpost.id}`;
 
-    const mailerResult = await firstValueFrom(
-      this.mailerClient.send(
-        { cmd: 'send-newsletter-bulk' },
-        {
-          emails,
-          html,
-          subject,
+    try {
+      const mailerResult = await firstValueFrom(
+        this.mailerClient.send(
+          { cmd: 'send-newsletter-bulk' },
+          {
+            emails,
+            html,
+            subject,
+          },
+        ),
+      );
+
+      const result = {
+        ...mailerResult,
+        recipientCount: emails.length,
+        blogpost: {
+          id: blogpost.id,
+          title: blogpost.title,
+          category: blogpost.category,
         },
-      ),
-    );
+      };
+
+      await this.logSentNewsletter({
+        type: 'blogpost',
+        subject,
+        html,
+        blogpostId: blogpost.id,
+        newsletterLink,
+        recipientCount: emails.length,
+        sentCount: this.toNumber(mailerResult?.sentCount),
+        failedCount: this.toNumber(mailerResult?.failedCount),
+        status: 'sent',
+      });
+
+      return result;
+    } catch (error) {
+      await this.logSentNewsletter({
+        type: 'blogpost',
+        subject,
+        html,
+        blogpostId: blogpost.id,
+        newsletterLink,
+        recipientCount: emails.length,
+        sentCount: 0,
+        failedCount: emails.length,
+        status: 'failed',
+        error: this.errorMessage(error),
+      });
+
+      throw new InternalServerErrorException('Blogpost newsletter send failed');
+    }
+  }
+
+  async getSentNewsletters(limit = 20, offset = 0) {
+    const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 20;
+    const safeOffset = Number.isFinite(offset) ? Math.max(offset, 0) : 0;
+
+    const { data, error, count } = await this.supabaseService
+      .getClient()
+      .from('sent_newsletters')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(safeOffset, safeOffset + safeLimit - 1);
+
+    if (error) {
+      throw new InternalServerErrorException('Failed to fetch sent newsletters');
+    }
 
     return {
-      ...mailerResult,
-      recipientCount: emails.length,
-      blogpost: {
-        id: blogpost.id,
-        title: blogpost.title,
-        category: blogpost.category,
-      },
+      items: data || [],
+      total: count || 0,
+      limit: safeLimit,
+      offset: safeOffset,
     };
   }
 
   private stripCodeFence(value: string): string {
     return value.replace(/^```html\s*/i, '').replace(/```$/i, '').trim();
+  }
+
+  private async logSentNewsletter(entry: {
+    type: 'manual' | 'blogpost';
+    subject: string;
+    html: string;
+    blogpostId?: string;
+    newsletterLink?: string;
+    recipientCount: number;
+    sentCount: number;
+    failedCount: number;
+    status: 'sent' | 'failed' | 'no_recipients';
+    error?: string;
+  }): Promise<void> {
+    const { error } = await this.supabaseService.getClient().from('sent_newsletters').insert({
+      type: entry.type,
+      subject: entry.subject,
+      html: entry.html,
+      blogpost_id: entry.blogpostId || null,
+      newsletter_link: entry.newsletterLink || null,
+      recipient_count: entry.recipientCount,
+      sent_count: entry.sentCount,
+      failed_count: entry.failedCount,
+      status: entry.status,
+      error: entry.error || null,
+    });
+
+    if (error) {
+      throw new InternalServerErrorException('Failed to log sent newsletter');
+    }
+  }
+
+  private toNumber(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const converted = Number(value);
+      return Number.isFinite(converted) ? converted : 0;
+    }
+
+    return 0;
+  }
+
+  private errorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    return 'Unknown error';
   }
 }

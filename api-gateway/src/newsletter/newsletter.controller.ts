@@ -3,16 +3,20 @@ import {
   Inject, 
   Post, 
   Get,
+  Query,
   Body, 
   UnauthorizedException,
-  BadRequestException 
+  BadRequestException,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices/client/client-proxy';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { SubscribeNewsletterDto } from './dto/subscribeNewsletter.dto';
 import { GenerateNewsletterHtmlDto } from './dto/generate-newsletter-html.dto';
 import { SendNewsletterDto } from './dto/send-newsletter.dto';
 import { SendBlogpostNewsletterDto } from './dto/send-blogpost-newsletter.dto';
+import { GetSentNewslettersDto } from './dto/get-sent-newsletters.dto';
 import { firstValueFrom } from 'rxjs';
 
 @ApiTags('Newsletter')
@@ -89,6 +93,106 @@ export class NewsletterController {
     } catch (e: any) {
       throw new BadRequestException(
         e?.message || 'Failed to retrieve newsletter subscribers'
+      );
+    }
+  }
+
+  @Get('sent-newsletters')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary: 'Get sent newsletters history (Admin only)',
+    description:
+      'Retrieve paginated history of newsletters sent from the system. Requires admin role.',
+  })
+  @ApiQuery({
+    name: 'userId',
+    required: true,
+    description: 'Admin user ID for authorization',
+    example: '5e3dd75b-7c38-4bf9-8a76-bc45bab74d7c',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Pagination limit (1-100), default 20',
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    description: 'Pagination offset, default 0',
+    example: 0,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved sent newsletters history',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Sent newsletters retrieved successfully',
+        data: {
+          items: [
+            {
+              id: '4dd140f1-c1fc-4454-a1b3-b72937b7d2fe',
+              type: 'blogpost',
+              subject: 'Why Modern Healthcare Needs AI More Than Ever - Hygieia Blog',
+              newsletter_link:
+                'https://hygieia-frontend.vercel.app/blogs/9a5d2f1a-9bc7-4c52-8214-1f03e11faa01',
+              recipient_count: 150,
+              sent_count: 150,
+              failed_count: 0,
+              status: 'sent',
+              created_at: '2026-04-07T09:00:00.000Z',
+            },
+          ],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        },
+        success: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - user is not an admin',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Only admins can perform this action',
+        success: false,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - validation or retrieval failure',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Failed to retrieve sent newsletters',
+        success: false,
+      },
+    },
+  })
+  async getSentNewsletters(@Query() query: GetSentNewslettersDto) {
+    try {
+      await this.verifyAdmin(query.userId);
+
+      return await firstValueFrom(
+        this.adminClient.send(
+          { cmd: 'get_sent_newsletters' },
+          {
+            limit: query.limit ?? 20,
+            offset: query.offset ?? 0,
+          },
+        ),
+      );
+    } catch (e: any) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
+      throw new BadRequestException(
+        e?.message || 'Failed to retrieve sent newsletters',
       );
     }
   }

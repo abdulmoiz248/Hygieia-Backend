@@ -4,6 +4,7 @@ import { NewsletterService } from './newsletter.service';
 import { GenerateNewsletterHtmlDto } from './dto/generate-newsletter-html.dto';
 import { SendNewsletterDto } from './dto/send-newsletter.dto';
 import { SendBlogpostNewsletterDto } from './dto/send-blogpost-newsletter.dto';
+import { GetSentNewslettersDto } from './dto/get-sent-newsletters.dto';
 
 @Controller('newsletter')
 export class NewsletterController {
@@ -41,6 +42,19 @@ export class NewsletterController {
     return {
       data: result,
       message: 'Blogpost newsletter sent successfully',
+    };
+  }
+
+  @MessagePattern({ cmd: 'get_sent_newsletters' })
+  async getSentNewsletters(payload: GetSentNewslettersDto) {
+    const result = await this.newsletterService.getSentNewsletters(
+      payload?.limit,
+      payload?.offset,
+    );
+
+    return {
+      data: result,
+      message: 'Sent newsletters retrieved successfully',
     };
   }
 }

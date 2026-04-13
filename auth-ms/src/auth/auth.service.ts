@@ -798,6 +798,50 @@ export class AuthService {
 }
 
 
+  async getUserRoleCounts() {
+    console.log('[INFO: AUTH SERVICE] Getting user counts by role')
+
+    const { data, error } = await this.supabase.getClient()
+      .from('users')
+      .select('role')
+
+    if (error) {
+      console.error(`[INFO: AUTH SERVICE] Failed to fetch user role counts: ${error.message}`)
+      throw new BadRequestException('Failed to fetch user role counts')
+    }
+
+    const roleCounts = new Map<string, number>()
+
+    for (const row of data || []) {
+      const role = this.normalizeRoleForCounts(row.role)
+      roleCounts.set(role, (roleCounts.get(role) || 0) + 1)
+    }
+
+    const counts = Array.from(roleCounts.entries()).map(([role, count]) => ({ role, count }))
+    const totalUsers = data?.length || 0
+
+    console.log(`[INFO: AUTH SERVICE] User role counts fetched successfully. Total users: ${totalUsers}`)
+    return {
+      totalUsers,
+      roleCounts: counts,
+      success: true,
+      message: 'User role counts fetched successfully',
+    }
+  }
+
+  private normalizeRoleForCounts(role: string): string {
+    if (!role) {
+      return 'unknown'
+    }
+
+    if (role === 'lab-technician' || role === 'lab_technician' || role === 'pathologist') {
+      return 'lab_technician'
+    }
+
+    return role
+  }
+
+
   async upsertUserProfileByRole(role: string, profileData: Record<string, any>) {
   console.log(`[INFO: AUTH SERVICE] Upserting profile for role: ${role}`)
   const client = this.supabase.getClient()

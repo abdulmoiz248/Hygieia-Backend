@@ -228,6 +228,17 @@ async getUserData(payload: { id: string; role: string }) {
 }
 
 
+@MessagePattern({ cmd: 'user-role-counts' })
+async getUserRoleCounts() {
+  try {
+    const result = await this.auth.getUserRoleCounts()
+    return createSuccessResponse('User role counts fetched successfully', result, 200)
+  } catch (error: any) {
+    return createErrorResponse(error.message || 'Failed to fetch user role counts', error.detail, error.status || 400)
+  }
+}
+
+
 @MessagePattern({ cmd: 'upload-user-photo' })
 async uploadUserPhoto(payload: { role: string; userId: string; fileBuffer: Buffer }) {
   try {

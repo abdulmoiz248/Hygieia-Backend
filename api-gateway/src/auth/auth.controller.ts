@@ -25,6 +25,7 @@ import { RequestPasswordResetDto } from './dto/request-password-reset.dto'
 import { ResetPasswordDto } from './dto/reset-password.dto'
 import { UpsertUserProfileDto } from './dto/upsert-user-profile.dto'
 import { DeleteWorkerDto } from './dto/delete-worker.dto'
+import { UserRoleCountsResponseDto } from './dto/user-role-counts.dto'
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -139,6 +140,57 @@ export class AuthController {
       return await firstValueFrom(this.authClient.send({ cmd: 'delete-worker' }, deleteWorkerDto))
     } catch (e: any) {
       throw new BadRequestException(e?.message || 'Worker deletion failed')
+    }
+  }
+
+  @Get('user-role-counts')
+  @ApiOperation({
+    summary: 'Get user counts by role (Admin only)',
+    description:
+      'Returns the total number of users grouped by role from the Supabase users table. This endpoint is intended for admin dashboards.',
+  })
+  @ApiQuery({ name: 'userId', description: 'Authenticated admin user ID', required: true })
+  @ApiResponse({
+    status: 200,
+    description: 'User role counts retrieved successfully',
+    type: UserRoleCountsResponseDto,
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'User role counts fetched successfully',
+        success: true,
+        data: {
+          totalUsers: 241,
+          roleCounts: [
+            { role: 'patient', count: 180 },
+            { role: 'doctor', count: 24 },
+            { role: 'nutritionist', count: 18 },
+            { role: 'lab_technician', count: 12 },
+            { role: 'admin', count: 7 },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - only admins can access this endpoint',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request or failed to fetch counts',
+  })
+  async getUserRoleCounts(@Query('userId') userId: string) {
+    if (!userId) {
+      throw new BadRequestException('userId is required')
+    }
+
+    await this.verifyAdmin(userId)
+
+    try {
+      return await firstValueFrom(this.authClient.send({ cmd: 'user-role-counts' }, {}))
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Failed to fetch user role counts')
     }
   }
 
@@ -437,6 +489,23 @@ export class AuthController {
       return await firstValueFrom(this.authClient.send({ cmd: 'resend-password-reset-otp' }, requestPasswordResetDto))
     } catch (e: any) {
       throw new BadRequestException(e?.message || 'resend password reset otp failed')
+    }
+  }
+
+  private async verifyAdmin(userId: string): Promise<void> {
+    try {
+      const userResult = await firstValueFrom(
+        this.authClient.send({ cmd: 'user-data' }, { id: userId, role: 'admin' }),
+      )
+
+      if (!userResult?.data?.role || userResult.data.role !== 'admin') {
+        throw new UnauthorizedException('Only admins can perform this action')
+      }
+    } catch (error: any) {
+      if (error instanceof UnauthorizedException) {
+        throw error
+      }
+      throw new UnauthorizedException('Only admins can perform this action')
     }
   }
 

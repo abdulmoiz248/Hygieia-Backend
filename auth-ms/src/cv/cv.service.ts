@@ -288,8 +288,66 @@ export class CvService {
     }
   }
 
+  async updateStatus(id: string, status: 'new' | 'shortlisted' | 'reviewed' | 'rejected') {
+    console.log('[CV MS] updateStatus called for id:', id, 'status:', status)
 
+    try {
+      // Check if CV exists
+      const { data: existingCv, error: findError } = await this.supabase
+        .from('cv')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
 
+      if (findError) {
+        console.error('[CV MS] error finding CV:', findError)
+        throw new InternalServerErrorException('Failed to find CV')
+      }
+
+      if (!existingCv) {
+        throw new NotFoundException('CV not found')
+      }
+
+      // Update the status
+      console.log('[CV MS] updating Supabase status for CV:', id)
+      const { data, error } = await this.supabase
+        .from('cv')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('[CV MS] Supabase update error:', error)
+        throw new InternalServerErrorException('Failed to update CV status')
+      }
+
+      console.log('[CV MS] status update success:', data)
+
+      // Emit events to mailer service based on status
+      if (status === 'shortlisted') {
+        this.mailerClient.emit('cv-shortlisted', {
+          email: existingCv.email,
+          fullName: existingCv.fullName,
+        })
+        console.log('[CV MS] emitted cv-shortlisted event for:', existingCv.email)
+      } else if (status === 'rejected') {
+        this.mailerClient.emit('cv-rejected', {
+          email: existingCv.email,
+          fullName: existingCv.fullName,
+        })
+        console.log('[CV MS] emitted cv-rejected event for:', existingCv.email)
+      }
+
+      return data
+    } catch (error) {
+      console.error('[CV MS] updateStatus error:', error)
+      if (error instanceof NotFoundException || 
+          error instanceof InternalServerErrorException) {
+        throw error
+      }
+      throw new InternalServerErrorException('An unexpected error occurred while updating CV status')
+    }}
 
 
 }

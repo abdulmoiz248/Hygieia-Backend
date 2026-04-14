@@ -37,4 +37,9 @@ update(@Payload() payload: { id: string; dto: UpdateCvDto; file?: { buffer: stri
   remove(@Payload() id: string) {
     return this.cvService.remove(id)
   }
+
+  @MessagePattern({ cmd: 'update_cv_status' })
+  updateStatus(@Payload() payload: { id: string; status: 'new' | 'shortlisted' | 'reviewed' | 'rejected' }) {
+    return this.cvService.updateStatus(payload.id, payload.status)
+  }
 }

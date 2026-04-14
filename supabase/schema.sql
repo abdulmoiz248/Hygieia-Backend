@@ -49,6 +49,16 @@ CREATE TYPE "public"."user_role" AS ENUM (
 
 ALTER TYPE "public"."user_role" OWNER TO "postgres";
 
+CREATE TYPE "public"."cv_status" AS ENUM (
+    'new',
+    'shortlisted',
+    'reviewed',
+    'rejected'
+);
+
+
+ALTER TYPE "public"."cv_status" OWNER TO "postgres";
+
 
 CREATE OR REPLACE FUNCTION "public"."set_updated_at"() RETURNS "trigger"
     LANGUAGE "plpgsql"
@@ -168,6 +178,7 @@ CREATE TABLE IF NOT EXISTS "public"."cv" (
     "cvLink" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "experience" "text",
+    "status" "public"."cv_status" DEFAULT 'new'::"public"."cv_status" NOT NULL,
     CONSTRAINT "cv_role_check" CHECK (("role" = ANY (ARRAY['doctor'::"text", 'nutritionist'::"text", 'lab_technician'::"text"])))
 );
 

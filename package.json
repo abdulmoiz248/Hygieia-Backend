@@ -6,8 +6,10 @@
     "mprocs": "^0.7.3"
   },
   "scripts": {
-  "start:dev": "mprocs -c .mprocs.yml"
-}
+    "start:dev": "mprocs -c .mprocs.yml",
+    "start:separate": "bash scripts/run-all-separate-terminals.sh",
+    "stop:separate": "bash scripts/stop-all-separate-terminals.sh"
+  }
 
   
 }

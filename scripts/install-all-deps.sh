@@ -17,8 +17,49 @@ elif command -v python >/dev/null 2>&1; then
   python_cmd="python"
 fi
 
+core_services=(
+  "api-gateway"
+  "auth-ms"
+  "lab"
+  "fitness"
+  "appointments"
+  "scheduler"
+  "mailer"
+  "admin"
+  "embeddings"
+  "recommendations"
+  "mcp"
+)
+
 node_services=()
 python_services=()
+
+add_unique() {
+  local value="$1"
+  shift
+  local -n arr_ref="$1"
+  for existing in "${arr_ref[@]:-}"; do
+    if [[ "$existing" == "$value" ]]; then
+      return
+    fi
+  done
+  arr_ref+=("$value")
+}
+
+for service_dir in "${core_services[@]}"; do
+  if [[ ! -d "$service_dir" ]]; then
+    echo "Warning: configured microservice folder not found: $service_dir"
+    continue
+  fi
+
+  if [[ -f "$service_dir/package.json" ]]; then
+    add_unique "$service_dir" node_services
+  fi
+
+  if [[ -f "$service_dir/requirements.txt" ]]; then
+    add_unique "$service_dir" python_services
+  fi
+done
 
 for dir in */; do
   service_dir="${dir%/}"
@@ -28,11 +69,11 @@ for dir in */; do
   fi
 
   if [[ -f "$service_dir/package.json" ]]; then
-    node_services+=("$service_dir")
+    add_unique "$service_dir" node_services
   fi
 
   if [[ -f "$service_dir/requirements.txt" ]]; then
-    python_services+=("$service_dir")
+    add_unique "$service_dir" python_services
   fi
 done
 

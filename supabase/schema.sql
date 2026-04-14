@@ -328,6 +328,70 @@ CREATE UNIQUE INDEX "medication_adherence_unique_patient_prescription_medication
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."adherence_monthly_records" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "patient_id" "uuid" NOT NULL,
+    "month_year" "text" NOT NULL,
+    "adherence_score" integer NOT NULL,
+    "health_score" integer NOT NULL,
+    "medication_adherence" integer NOT NULL,
+    "diet_adherence" integer NOT NULL,
+    "total_days" integer NOT NULL,
+    "notes" "text",
+    "recorded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "adherence_monthly_records_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "adherence_monthly_records_patient_id_fkey" FOREIGN KEY ("patient_id") REFERENCES "public"."users"("id") ON DELETE CASCADE,
+    CONSTRAINT "adherence_score_range" CHECK ((("adherence_score" >= 0) AND ("adherence_score" <= 100))),
+    CONSTRAINT "health_score_range" CHECK ((("health_score" >= 0) AND ("health_score" <= 100))),
+    CONSTRAINT "medication_adherence_range" CHECK ((("medication_adherence" >= 0) AND ("medication_adherence" <= 100))),
+    CONSTRAINT "diet_adherence_range" CHECK ((("diet_adherence" >= 0) AND ("diet_adherence" <= 100)))
+);
+
+
+ALTER TABLE "public"."adherence_monthly_records" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."patient_recommendations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "patient_id" "uuid" NOT NULL,
+    "recommendations" "jsonb" NOT NULL,
+    "context_hash" "text",
+    "source" "text" DEFAULT 'langgraph-groq'::"text" NOT NULL,
+    "generated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "patient_recommendations_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "patient_recommendations_patient_id_fkey" FOREIGN KEY ("patient_id") REFERENCES "public"."users"("id") ON DELETE CASCADE
+);
+
+
+ALTER TABLE "public"."patient_recommendations" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."sent_newsletters" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "type" "text" NOT NULL,
+    "subject" "text" NOT NULL,
+    "html" "text",
+    "blogpost_id" "uuid",
+    "newsletter_link" "text",
+    "recipient_count" integer DEFAULT 0 NOT NULL,
+    "sent_count" integer DEFAULT 0 NOT NULL,
+    "failed_count" integer DEFAULT 0 NOT NULL,
+    "status" "text" DEFAULT 'sent'::"text" NOT NULL,
+    "error" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "sent_newsletters_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "sent_newsletters_blogpost_id_fkey" FOREIGN KEY ("blogpost_id") REFERENCES "public"."blogpost"("id") ON DELETE SET NULL,
+    CONSTRAINT "sent_newsletters_type_check" CHECK (("type" = ANY (ARRAY['manual'::"text", 'blogpost'::"text"])))
+);
+
+
+ALTER TABLE "public"."sent_newsletters" OWNER TO "postgres";
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."newsletter" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "email" "text" NOT NULL,
@@ -564,10 +628,30 @@ CREATE INDEX "idx_fitbit_tokens_fitbit_user_id" ON "public"."fitbit_tokens" USIN
 CREATE INDEX "idx_fitbit_tokens_user_id" ON "public"."fitbit_tokens" USING "btree" ("user_id");
 
 
+
+CREATE UNIQUE INDEX "adherence_monthly_unique_patient_month" ON "public"."adherence_monthly_records" USING "btree" ("patient_id", "month_year");
+
+
+
+CREATE INDEX "adherence_monthly_patient_idx" ON "public"."adherence_monthly_records" USING "btree" ("patient_id");
+
+
+
+CREATE INDEX "adherence_monthly_month_idx" ON "public"."adherence_monthly_records" USING "btree" ("month_year");
+
+
 CREATE INDEX "idx_appointment_reviews_patient" ON "public"."appointment_reviews" USING "btree" ("patient_id", "created_at" DESC);
 
 
 CREATE INDEX "idx_appointment_reviews_provider" ON "public"."appointment_reviews" USING "btree" ("provider_id", "provider_role", "created_at" DESC);
+
+
+
+CREATE INDEX "idx_patient_recommendations_patient_generated" ON "public"."patient_recommendations" USING "btree" ("patient_id", "generated_at" DESC);
+
+
+
+CREATE INDEX "idx_sent_newsletters_created_at" ON "public"."sent_newsletters" USING "btree" ("created_at" DESC);
 
 
 
@@ -604,6 +688,14 @@ CREATE OR REPLACE TRIGGER "trg_prescriptions_updated_at" BEFORE UPDATE ON "publi
 
 
 CREATE OR REPLACE TRIGGER "trg_users_updated_at" BEFORE UPDATE ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "appointment_reviews_set_updated_at" BEFORE UPDATE ON "public"."appointment_reviews" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_adherence_monthly_records_updated_at" BEFORE UPDATE ON "public"."adherence_monthly_records" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
 
 
 
@@ -770,6 +862,10 @@ CREATE POLICY "Users can read their own notifications" ON "public"."notification
 
 
 
+CREATE POLICY "Service role can manage patient recommendations" ON "public"."patient_recommendations" FOR ALL TO "service_role" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."appointments" ENABLE ROW LEVEL SECURITY;
 
 
@@ -810,6 +906,9 @@ ALTER TABLE "public"."newsletter" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."notifications" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."patient_recommendations" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."referred_tests" ENABLE ROW LEVEL SECURITY;
@@ -912,6 +1011,18 @@ GRANT ALL ON TABLE "public"."medical_records" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."adherence_monthly_records" TO "anon";
+GRANT ALL ON TABLE "public"."adherence_monthly_records" TO "authenticated";
+GRANT ALL ON TABLE "public"."adherence_monthly_records" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."appointment_reviews" TO "anon";
+GRANT ALL ON TABLE "public"."appointment_reviews" TO "authenticated";
+GRANT ALL ON TABLE "public"."appointment_reviews" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."medication_adherence_logs" TO "anon";
 GRANT ALL ON TABLE "public"."medication_adherence_logs" TO "authenticated";
 GRANT ALL ON TABLE "public"."medication_adherence_logs" TO "service_role";
@@ -930,6 +1041,12 @@ GRANT ALL ON TABLE "public"."notifications" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."patient_recommendations" TO "anon";
+GRANT ALL ON TABLE "public"."patient_recommendations" TO "authenticated";
+GRANT ALL ON TABLE "public"."patient_recommendations" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."prescriptions" TO "anon";
 GRANT ALL ON TABLE "public"."prescriptions" TO "authenticated";
 GRANT ALL ON TABLE "public"."prescriptions" TO "service_role";
@@ -939,6 +1056,12 @@ GRANT ALL ON TABLE "public"."prescriptions" TO "service_role";
 GRANT ALL ON TABLE "public"."referred_tests" TO "anon";
 GRANT ALL ON TABLE "public"."referred_tests" TO "authenticated";
 GRANT ALL ON TABLE "public"."referred_tests" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."sent_newsletters" TO "anon";
+GRANT ALL ON TABLE "public"."sent_newsletters" TO "authenticated";
+GRANT ALL ON TABLE "public"."sent_newsletters" TO "service_role";
 
 
 

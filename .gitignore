@@ -46,3 +46,6 @@ __pycache__/
 .env.all
 
 .venv
+
+# recommendation model artifacts
+recommendations/models/

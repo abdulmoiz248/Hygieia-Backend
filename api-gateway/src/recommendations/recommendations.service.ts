@@ -12,10 +12,12 @@ export class RecommendationsService {
   private readonly recommendationsServiceUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.recommendationsServiceUrl =
+    const recommendationsServiceUrl =
       this.configService.get<string>('RECOMMENDATIONS_SERVICE_URL') ||
       process.env.RECOMMENDATIONS_SERVICE_URL ||
       'http://localhost:4012';
+
+    this.recommendationsServiceUrl = recommendationsServiceUrl.replace(/\/$/, '');
   }
 
   async getLatest(patientId: string) {
@@ -32,6 +34,18 @@ export class RecommendationsService {
 
   async refreshAll() {
     return this.forwardRequest('/recommendations/refresh-all', 'POST');
+  }
+
+  async getModelStatus() {
+    return this.forwardRequest('/model/status');
+  }
+
+  async predictAcne(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Image file is required.');
+    }
+
+    return this.forwardMultipartRequest('/predict-acne', file);
   }
 
   private async forwardRequest(path: string, method: 'GET' | 'POST' = 'GET') {
@@ -62,6 +76,42 @@ export class RecommendationsService {
       }
       if (response.status === 404) {
         throw new NotFoundException(reason);
+      }
+      if (response.status === 503) {
+        throw new ServiceUnavailableException(reason);
+      }
+      throw new InternalServerErrorException(reason);
+    }
+
+    return body;
+  }
+
+  private async forwardMultipartRequest(path: string, file: Express.Multer.File) {
+    const formData = new FormData();
+    formData.append('image', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
+
+    let response: Response;
+
+    try {
+      response = await fetch(`${this.recommendationsServiceUrl}${path}`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch {
+      throw new ServiceUnavailableException('Recommendations service is unavailable.');
+    }
+
+    let body: any = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+
+    if (!response.ok) {
+      const reason = body?.detail || body?.message || 'Acne prediction request failed.';
+      if (response.status === 400) {
+        throw new BadRequestException(reason);
       }
       if (response.status === 503) {
         throw new ServiceUnavailableException(reason);

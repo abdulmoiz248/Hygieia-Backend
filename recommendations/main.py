@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from services.recommendation_service import RecommendationService
 
@@ -34,6 +34,68 @@ class RefreshAllResponse(BaseModel):
     total: int | None = None
     success: int | None = None
     failed: int | None = None
+    failures: list[dict[str, str]] | None = None
+    finished_at: str | None = None
+
+
+class RecommendationItemResponse(BaseModel):
+    type: str
+    title: str
+    description: str
+    priority: str
+    timeframe: str
+    doctorId: str | None = None
+    specialization: str | None = None
+    conditions: list[str] | None = None
+
+
+class RecommendationRecordResponse(BaseModel):
+    id: str
+    patient_id: str
+    recommendations: list[RecommendationItemResponse]
+    generated_at: str
+    source: str | None = None
+
+
+class RecommendationGenerationResponse(BaseModel):
+    patient_id: str
+    generated_count: int
+    record_id: str | None = None
+    generated_at: str | None = None
+
+
+class ModelStatusResponse(BaseModel):
+    status: str
+    loaded: bool
+    path: str
+    source_url: str | None = None
+    downloaded: bool | None = None
+    loaded_via: str | None = None
+    artifact_type: str | None = None
+    loaded_at: str | None = None
+    size_bytes: int | None = None
+    error: str | None = None
+
+
+class AcnePredictionResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    predicted_class: str
+    confidence: float
+    probabilities: dict[str, float]
+    model_status: ModelStatusResponse
+
+
+class HealthResponse(BaseModel):
+    status: str
+    scheduler: str
+    model: ModelStatusResponse
+    timestamp: str
+
+
+class RootResponse(BaseModel):
+    service: str
+    status: str
+    timestamp: str
 
 
 async def run_generation_job(trigger: str) -> None:
@@ -57,6 +119,7 @@ async def lifespan(_: FastAPI):
     global service, scheduler
 
     service = RecommendationService()
+    await service.ensure_model_ready()
 
     scheduler = AsyncIOScheduler(timezone=os.getenv("SCHEDULER_TIMEZONE", "UTC"))
     run_hour = int(os.getenv("RECOMMENDATION_CRON_HOUR", "12"))
@@ -86,7 +149,7 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.get("/", response_model=RootResponse, summary="Service root", tags=["System"])
 async def root():
     return {
         "service": "patient-recommendations",
@@ -95,16 +158,48 @@ async def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse, summary="Health check", tags=["System"])
 async def health():
     return {
         "status": "healthy",
         "scheduler": "running" if scheduler and scheduler.running else "stopped",
+        "model": service.get_model_status()
+        if service
+        else {
+            "status": "unavailable",
+            "loaded": False,
+            "path": "",
+            "source_url": None,
+            "downloaded": False,
+            "loaded_via": None,
+            "artifact_type": None,
+            "loaded_at": None,
+            "size_bytes": None,
+            "error": None,
+        },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
-@app.get("/recommendations/{patient_id}")
+@app.get(
+    "/model/status",
+    response_model=ModelStatusResponse,
+    summary="Model bootstrap status",
+    tags=["Model"],
+)
+async def model_status():
+    if not service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+
+    return service.get_model_status()
+
+
+@app.get(
+    "/recommendations/{patient_id}",
+    response_model=RecommendationRecordResponse,
+    summary="Get latest recommendations for a patient",
+    tags=["Recommendations"],
+)
 async def get_latest_recommendation(patient_id: str):
     if not service:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
@@ -118,7 +213,12 @@ async def get_latest_recommendation(patient_id: str):
     return latest
 
 
-@app.get("/recommendations/{patient_id}/history")
+@app.get(
+    "/recommendations/{patient_id}/history",
+    response_model=list[RecommendationRecordResponse],
+    summary="Get recommendation history for a patient",
+    tags=["Recommendations"],
+)
 async def get_recommendation_history(patient_id: str, limit: int = Query(default=10, ge=1, le=50)):
     if not service:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
@@ -126,7 +226,12 @@ async def get_recommendation_history(patient_id: str, limit: int = Query(default
     return await service.get_recommendation_history(patient_id=patient_id, limit=limit)
 
 
-@app.post("/recommendations/{patient_id}/refresh")
+@app.post(
+    "/recommendations/{patient_id}/refresh",
+    response_model=RecommendationGenerationResponse,
+    summary="Regenerate recommendations for a patient",
+    tags=["Recommendations"],
+)
 async def refresh_patient_recommendation(patient_id: str):
     if not service:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
@@ -140,13 +245,43 @@ async def refresh_patient_recommendation(patient_id: str):
         ) from exc
 
 
-@app.post("/recommendations/refresh-all", response_model=RefreshAllResponse)
+@app.post(
+    "/recommendations/refresh-all",
+    response_model=RefreshAllResponse,
+    summary="Generate recommendations for all patients",
+    tags=["Recommendations"],
+)
 async def refresh_all_recommendations():
     if not service:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
 
     result = await service.run_daily_generation()
     return result
+
+
+@app.post(
+    "/predict-acne",
+    response_model=AcnePredictionResponse,
+    summary="Predict acne class from an uploaded image",
+    tags=["Acne Prediction"],
+)
+async def predict_acne(image: UploadFile = File(..., description="Acne image to classify")):
+    if not service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+
+    if image.content_type and not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file must be an image")
+
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty")
+
+    try:
+        return await service.predict_acne(image_bytes)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
 if __name__ == "__main__":

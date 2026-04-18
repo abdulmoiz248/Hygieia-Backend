@@ -329,6 +329,71 @@ export class AppointmentsService {
     }))
   }
 
+  private parseMedicationDurationInDays(duration: string | undefined): number | null {
+    const normalized = (duration || '').toString().trim().toLowerCase()
+    if (!normalized) return null
+
+    if (/^\d+$/.test(normalized)) {
+      return Number(normalized)
+    }
+
+    const match = normalized.match(/(\d+(?:\.\d+)?)\s*(day|days|week|weeks|month|months)/)
+    if (!match) return null
+
+    const value = Number(match[1])
+    const unit = match[2]
+
+    if (!Number.isFinite(value) || value <= 0) return null
+    if (unit.startsWith('day')) return Math.ceil(value)
+    if (unit.startsWith('week')) return Math.ceil(value * 7)
+    if (unit.startsWith('month')) return Math.ceil(value * 30)
+
+    return null
+  }
+
+  private addDaysToDateOnly(dateOnly: string, daysToAdd: number): string {
+    const date = new Date(`${dateOnly}T00:00:00.000Z`)
+    date.setUTCDate(date.getUTCDate() + daysToAdd)
+    return this.getUtcDateOnly(date)
+  }
+
+  private resolvePrescriptionStartDate(row: PrescriptionRow, fallbackDate: string): string {
+    if (row.start_date) return row.start_date
+
+    const createdAt = row.created_at ? new Date(row.created_at) : null
+    if (createdAt && !Number.isNaN(createdAt.getTime())) {
+      return this.getUtcDateOnly(createdAt)
+    }
+
+    return fallbackDate
+  }
+
+  private isMedicationDurationCompleted(
+    medication: PrescriptionMedication,
+    prescriptionStartDate: string,
+    todayDate: string,
+  ): boolean {
+    const durationDays = this.parseMedicationDurationInDays(medication.duration)
+    if (durationDays === null) return false
+
+    const medicationEndDate = this.addDaysToDateOnly(prescriptionStartDate, Math.max(0, durationDays - 1))
+    return medicationEndDate < todayDate
+  }
+
+  private shouldAutoCompletePrescription(row: PrescriptionRow, todayDate: string): boolean {
+    if (row.status !== 'active') return false
+
+    if (row.end_date && row.end_date < todayDate) {
+      return true
+    }
+
+    const medications = Array.isArray(row.medications) ? row.medications : []
+    if (medications.length === 0) return false
+
+    const startDate = this.resolvePrescriptionStartDate(row, todayDate)
+    return medications.every((medication) => this.isMedicationDurationCompleted(medication, startDate, todayDate))
+  }
+
   async create(dto: CreateAppointmentDto): Promise<ApiRow> {
     this.logger("Appointment creation called for patient id="+dto.patientId)
 
@@ -411,7 +476,7 @@ export class AppointmentsService {
           if (patientUserError) this.logger("PATIENT USER ERROR: " + patientUserError.message)
           if (doctorUserError) this.logger("DOCTOR USER ERROR: " + doctorUserError.message)
         }
-      } catch (error) {
+      } catch (error:any) {
         this.logger("ERROR GENERATING REAL GOOGLE MEET LINK: " + error.message)
         // Don't throw error, just log it - appointment creation should still succeed
       }
@@ -473,7 +538,7 @@ export class AppointmentsService {
           this.logger("ERROR FETCHING USER EMAIL: " + userError.message)
         }
       }
-    } catch (error) {
+    } catch (error:any) {
       this.logger("ERROR SENDING APPOINTMENT CONFIRMATION EMAIL: " + error.message)
       // Don't throw error, just log it - appointment creation should still succeed
     }
@@ -661,7 +726,7 @@ async update(id: string, dto: any): Promise<ApiRow> {
         this.logger("ERROR FETCHING USER EMAIL: " + userError.message)
       }
     }
-  } catch (error) {
+  } catch (error:any) {
     this.logger("ERROR SENDING APPOINTMENT UPDATE EMAIL: " + error.message)
     // Don't throw error, just log it - update should still succeed
   }
@@ -732,7 +797,7 @@ async update(id: string, dto: any): Promise<ApiRow> {
           this.logger("ERROR FETCHING USER EMAIL: " + userError.message)
         }
       }
-    } catch (error) {
+    } catch (error:any) {
       this.logger("ERROR SENDING APPOINTMENT CANCELLATION EMAIL: " + error.message)
       // Don't throw error, just log it - cancellation should still succeed
     }
@@ -920,7 +985,7 @@ async update(id: string, dto: any): Promise<ApiRow> {
           this.logger('ERROR FETCHING USER EMAIL: ' + userError.message)
         }
       }
-    } catch (error) {
+    } catch (error:any) {
       this.logger('ERROR IN sendCancellationNotifications: ' + error.message)
       throw error
     }
@@ -1396,12 +1461,42 @@ async getActivePrescriptionsForPatient(patientId: string) {
   if (error) throw new BadRequestException(error.message)
   if (!data) return []
 
+  const prescriptions = (data as PrescriptionRow[]) || []
+
   const pakistanDate = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Karachi',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   }).format(new Date())
+
+  const prescriptionIdsToComplete = prescriptions
+    .filter((row) => this.shouldAutoCompletePrescription(row, pakistanDate))
+    .map((row) => row.id)
+
+  if (prescriptionIdsToComplete.length > 0) {
+    const updatedAt = new Date().toISOString()
+    const { error: completionError } = await this.supabase
+      .from('prescriptions')
+      .update({ status: 'completed', updated_at: updatedAt })
+      .eq('patient_id', patientId)
+      .eq('status', 'active')
+      .in('id', prescriptionIdsToComplete)
+
+    if (completionError) throw new BadRequestException(completionError.message)
+
+    const completedIdSet = new Set(prescriptionIdsToComplete)
+    for (const row of prescriptions) {
+      if (!completedIdSet.has(row.id)) continue
+      row.status = 'completed'
+      row.updated_at = updatedAt
+    }
+
+    this.logger(
+      `AUTO-COMPLETED ${prescriptionIdsToComplete.length} PRESCRIPTION(S) FOR PATIENT=${patientId}`,
+    )
+  }
+
   const todayPkStartUtc = new Date(`${pakistanDate}T00:00:00+05:00`).toISOString()
   const todayPkEndUtc = new Date(`${pakistanDate}T23:59:59.999+05:00`).toISOString()
 
@@ -1428,7 +1523,7 @@ async getActivePrescriptionsForPatient(patientId: string) {
   )
 
   const enriched = await Promise.all(
-    (data as PrescriptionRow[]).map(async (row) => {
+    prescriptions.map(async (row) => {
       const doctor = await this.doctorProfileModel.findOne({ id: row.doctor_id }).lean()
       const medications = Array.isArray(row.medications) ? row.medications : []
       const medicationsWithTakenFlag = medications.map((medication) => {

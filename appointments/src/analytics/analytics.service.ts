@@ -13,6 +13,7 @@ type FitnessRow = {
   sleep: number | null
   calories_burned: number | null
   calories_intake: number | null
+  walk_calories_burned?: number | null
   protein: number | null
   fat: number | null
   carbs: number | null
@@ -78,6 +79,9 @@ type DashboardAnalyticsResponse = {
 
 @Injectable()
 export class AnalyticsService {
+  private static readonly KARACHI_TIMEZONE = 'Asia/Karachi'
+  private static readonly DAY_IN_MS = 24 * 60 * 60 * 1000
+
   constructor(
     @Inject(SUPABASE) private readonly supabase: SupabaseClient,
     @InjectModel(Profile.name) private readonly profileModel: Model<ProfileDocument>,
@@ -85,8 +89,9 @@ export class AnalyticsService {
 
   async getDashboardAnalytics(patientId: string): Promise<DashboardAnalyticsResponse> {
     const now = new Date()
-    const sevenDaysAgo = new Date(now)
-    sevenDaysAgo.setDate(now.getDate() - 6)
+    const todayRange = this.getKarachiDayRange(now)
+    const sevenDaysAgo = new Date(todayRange.start.getTime() - 6 * AnalyticsService.DAY_IN_MS)
+    const todayEnd = todayRange.end
 
     const sixMonthsAgo = new Date(now)
     sixMonthsAgo.setMonth(now.getMonth() - 5)
@@ -102,7 +107,7 @@ export class AnalyticsService {
     ] = await Promise.all([
       this.supabase
         .from('fitness')
-        .select('created_at, steps, water, sleep, calories_burned, calories_intake, protein, fat, carbs')
+        .select('created_at, steps, water, sleep, calories_burned, walk_calories_burned, calories_intake, protein, fat, carbs')
         .eq('patient_id', patientId)
         .gte('created_at', sixMonthsAgo.toISOString())
         .order('created_at', { ascending: true }),
@@ -128,7 +133,7 @@ export class AnalyticsService {
       ? []
       : ((adherenceMonthlyResponse.data as AdherenceMonthlyRow[]) || [])
 
-    const weeklyActivity = this.buildWeeklyActivity(fitness, sevenDaysAgo)
+    const weeklyActivity = this.buildWeeklyActivity(fitness, sevenDaysAgo, todayEnd)
     const medicationAdherence = this.buildMedicationAdherence(medicationLogs, now)
     const monthlyProgress = this.buildMonthlyProgress(fitness, adherenceMonthly, profile as any, now)
     const healthFocus = this.buildHealthFocus(weeklyActivity, adherenceMonthly, profile as any, medicationAdherence)
@@ -146,10 +151,19 @@ export class AnalyticsService {
     }
   }
 
-  private buildWeeklyActivity(fitness: FitnessRow[], fromDate: Date) {
-    const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    const hasRecentData = fitness.some((row) => row.created_at && new Date(row.created_at) >= fromDate)
-    if (!hasRecentData) return []
+  private buildWeeklyActivity(fitness: FitnessRow[], fromDate: Date, toDate: Date) {
+    const start = new Date(fromDate)
+    const end = new Date(toDate)
+
+    const dayBuckets: Array<{ key: string; day: string }> = []
+    for (let i = 0; i < 7; i++) {
+      const cursor = new Date(end)
+      cursor.setTime(end.getTime() - i * AnalyticsService.DAY_IN_MS)
+      dayBuckets.push({
+        key: this.getKarachiDateKey(cursor),
+        day: this.getKarachiWeekday(cursor),
+      })
+    }
 
     const aggregate = new Map<string, {
       calories: number
@@ -160,33 +174,39 @@ export class AnalyticsService {
       count: number
     }>()
 
-    for (const day of dayOrder) {
-      aggregate.set(day, { calories: 0, burned: 0, steps: 0, water: 0, sleep: 0, count: 0 })
+    for (const bucket of dayBuckets) {
+      aggregate.set(bucket.key, { calories: 0, burned: 0, steps: 0, water: 0, sleep: 0, count: 0 })
     }
 
     for (const row of fitness) {
       if (!row.created_at) continue
       const rowDate = new Date(row.created_at)
-      if (rowDate < fromDate) continue
+      if (rowDate < start || rowDate > end) continue
 
-      const day = rowDate.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 3)
-      if (!aggregate.has(day)) continue
+      const key = this.getKarachiDateKey(rowDate)
+      if (!aggregate.has(key)) continue
 
-      const current = aggregate.get(day)!
-      current.calories += Number(row.calories_intake || 0)
-      current.burned += Number(row.calories_burned || 0)
+      const current = aggregate.get(key)!
+      const burnedValue = Number(row.calories_burned || 0) + Number(row.walk_calories_burned || 0)
+      const caloriesValue = row.calories_intake != null ? Number(row.calories_intake) : burnedValue
+
+      current.calories += caloriesValue
+      current.burned += burnedValue
       current.steps += Number(row.steps || 0)
       current.water += Number(row.water || 0)
       current.sleep += Number(row.sleep || 0)
       current.count += 1
-      aggregate.set(day, current)
+      aggregate.set(key, current)
     }
 
-    return dayOrder.map((day) => {
-      const value = aggregate.get(day)!
+    const hasRecentData = Array.from(aggregate.values()).some((value) => value.count > 0)
+    if (!hasRecentData) return []
+
+    return dayBuckets.map((bucket) => {
+      const value = aggregate.get(bucket.key)!
       const count = value.count || 1
       return {
-        day,
+        day: bucket.day,
         calories: Math.round(value.calories / count),
         burned: Math.round(value.burned / count),
         steps: Math.round(value.steps / count),
@@ -194,6 +214,42 @@ export class AnalyticsService {
         sleep: Number((value.sleep / count).toFixed(1)),
       }
     })
+  }
+
+  private getKarachiDateParts(date: Date) {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: AnalyticsService.KARACHI_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+
+    const parts = formatter.formatToParts(date)
+    const year = Number(parts.find((part) => part.type === 'year')?.value)
+    const month = Number(parts.find((part) => part.type === 'month')?.value)
+    const day = Number(parts.find((part) => part.type === 'day')?.value)
+
+    return { year, month, day }
+  }
+
+  private getKarachiDateKey(date: Date) {
+    const { year, month, day } = this.getKarachiDateParts(date)
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
+  private getKarachiWeekday(date: Date) {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: AnalyticsService.KARACHI_TIMEZONE,
+      weekday: 'short',
+    }).format(date).slice(0, 3)
+  }
+
+  private getKarachiDayRange(date: Date) {
+    const { year, month, day } = this.getKarachiDateParts(date)
+    const startUtc = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - (5 * 60 * 60 * 1000)
+    const start = new Date(startUtc)
+    const end = new Date(startUtc + AnalyticsService.DAY_IN_MS - 1)
+    return { start, end }
   }
 
   private buildMedicationAdherence(logs: MedicationLogRow[], now: Date) {

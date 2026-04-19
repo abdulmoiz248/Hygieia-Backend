@@ -5,6 +5,7 @@ import { SUPABASE } from '../supabase/supabase.module'
 import { InjectModel } from '@nestjs/mongoose'
 import { Profile, ProfileDocument } from '../appointments/schema/patient.profile.schema'
 import { Model } from 'mongoose'
+import { PatientJournal, PatientJournalDocument } from '../patient-journal/schema/patient-journal.schema'
 
 type FitnessRow = {
   created_at: string
@@ -85,6 +86,8 @@ export class AnalyticsService {
   constructor(
     @Inject(SUPABASE) private readonly supabase: SupabaseClient,
     @InjectModel(Profile.name) private readonly profileModel: Model<ProfileDocument>,
+    @InjectModel(PatientJournal.name)
+    private readonly patientJournalModel: Model<PatientJournalDocument>,
   ) {}
 
   async getDashboardAnalytics(patientId: string): Promise<DashboardAnalyticsResponse> {
@@ -454,22 +457,49 @@ export class AnalyticsService {
     }
     console.log('[ANALYTICS SERVICE] Fitness records:', fitness?.length ?? 0)
 
-    const { data: medicalRecords, error: recordsError } = await this.supabase
-      .from('medical_records')
-      .select('*')
-      .eq('patient_id', patientId)
-      .order('date', { ascending: false })
+    const [
+      medicalRecordsResponse,
+      prescriptionsResponse,
+      journalEntries,
+    ] = await Promise.all([
+      this.supabase
+        .from('medical_records')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('date', { ascending: false }),
+      this.supabase
+        .from('prescriptions')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false }),
+      this.patientJournalModel
+        .find({ patientId })
+        .sort({ entryDate: -1, createdAt: -1 })
+        .lean(),
+    ])
 
-    if (recordsError) {
-      console.error('[ANALYTICS SERVICE] Medical records fetch error:', recordsError.message)
-      throw new Error(recordsError.message)
+    if (medicalRecordsResponse.error) {
+      console.error('[ANALYTICS SERVICE] Medical records fetch error:', medicalRecordsResponse.error.message)
+      throw new Error(medicalRecordsResponse.error.message)
     }
-    console.log('[ANALYTICS SERVICE] Medical records:', medicalRecords?.length ?? 0)
+
+    if (prescriptionsResponse.error) {
+      console.error('[ANALYTICS SERVICE] Prescriptions fetch error:', prescriptionsResponse.error.message)
+      throw new Error(prescriptionsResponse.error.message)
+    }
+
+    const medicalRecords = medicalRecordsResponse.data || []
+    const prescriptions = prescriptionsResponse.data || []
+    console.log('[ANALYTICS SERVICE] Medical records:', medicalRecords.length)
+    console.log('[ANALYTICS SERVICE] Prescriptions:', prescriptions.length)
+    console.log('[ANALYTICS SERVICE] Journal entries:', journalEntries?.length ?? 0)
 
     return {
       patientId,
       fitness,
       medicalRecords,
+      prescriptions,
+      journal: journalEntries || [],
     }
   }
 

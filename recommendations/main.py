@@ -85,6 +85,14 @@ class AcnePredictionResponse(BaseModel):
     model_status: ModelStatusResponse
 
 
+class DentalPredictionResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    predicted_class: str
+    confidence: float
+    probabilities: dict[str, float]
+    model_status: dict[str, object]
+
+
 class HealthResponse(BaseModel):
     status: str
     scheduler: str
@@ -120,6 +128,7 @@ async def lifespan(_: FastAPI):
 
     service = RecommendationService()
     await service.ensure_model_ready()
+    await service.ensure_dental_model_ready()
 
     scheduler = AsyncIOScheduler(timezone=os.getenv("SCHEDULER_TIMEZONE", "UTC"))
     run_hour = int(os.getenv("RECOMMENDATION_CRON_HOUR", "12"))
@@ -278,6 +287,31 @@ async def predict_acne(image: UploadFile = File(..., description="Acne image to 
 
     try:
         return await service.predict_acne(image_bytes)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+@app.post(
+    "/predict-dental",
+    response_model=DentalPredictionResponse,
+    summary="Predict dental condition class from an uploaded image",
+    tags=["Dental Prediction"],
+)
+async def predict_dental(image: UploadFile = File(..., description="Dental image to classify")):
+    if not service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+
+    if image.content_type and not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file must be an image")
+
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty")
+
+    try:
+        return await service.predict_dental(image_bytes)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except Exception as exc:

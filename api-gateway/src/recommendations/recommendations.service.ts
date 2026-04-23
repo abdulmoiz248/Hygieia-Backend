@@ -45,7 +45,15 @@ export class RecommendationsService {
       throw new BadRequestException('Image file is required.');
     }
 
-    return this.forwardMultipartRequest('/predict-acne', file);
+    return this.forwardMultipartRequest('/predict-acne', file, 'Acne prediction request failed.');
+  }
+
+  async predictDental(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Image file is required.');
+    }
+
+    return this.forwardMultipartRequest('/predict-dental', file, 'Dental prediction request failed.');
   }
 
   private async forwardRequest(path: string, method: 'GET' | 'POST' = 'GET') {
@@ -86,7 +94,7 @@ export class RecommendationsService {
     return body;
   }
 
-  private async forwardMultipartRequest(path: string, file: Express.Multer.File) {
+  private async forwardMultipartRequest(path: string, file: Express.Multer.File, fallbackErrorMessage: string) {
     const formData = new FormData();
     formData.append('image', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
 
@@ -109,7 +117,7 @@ export class RecommendationsService {
     }
 
     if (!response.ok) {
-      const reason = body?.detail || body?.message || 'Acne prediction request failed.';
+      const reason = body?.detail || body?.message || fallbackErrorMessage;
       if (response.status === 400) {
         throw new BadRequestException(reason);
       }

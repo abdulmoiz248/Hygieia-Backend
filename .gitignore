@@ -49,3 +49,4 @@ __pycache__/
 
 # recommendation model artifacts
 recommendations/models/
+dental_model/

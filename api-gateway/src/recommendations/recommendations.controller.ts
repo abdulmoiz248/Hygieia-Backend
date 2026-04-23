@@ -142,6 +142,87 @@ export class RecommendationsController {
     };
   }
 
+  @Post('predict-dental')
+  @ApiOperation({
+    summary: 'Predict dental condition class from an uploaded image',
+    description:
+      'Forwards a dental image to the recommendation service and returns the predicted dental condition class and confidence.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        image: { type: 'string', format: 'binary', description: 'Dental image file (X-ray/photo)' },
+      },
+      required: ['image'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Dental prediction completed successfully.',
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Dental prediction completed successfully',
+        data: {
+          predicted_class: 'Caries',
+          confidence: 0.94,
+          probabilities: {
+            'BDC-BDR': 0.01,
+            Caries: 0.94,
+            'Fractured Teeth': 0.01,
+            'Healthy Teeth': 0.02,
+            'Impacted teeth': 0.01,
+            Infection: 0.01,
+          },
+          model_status: {
+            status: 'ready',
+            loaded: true,
+            path: 'recommendations/models/dental_model/best_model.pth',
+            metadata_path: 'recommendations/models/dental_model/model_metadata.json',
+            source_url: 'https://drive.google.com/file/d/1cEK8DkVn4abbQ4D4BmXWUSiwx9I53Wh1/view',
+            class_names: ['BDC-BDR', 'Caries', 'Fractured Teeth', 'Healthy Teeth', 'Impacted teeth', 'Infection'],
+            img_size: 224,
+          },
+        },
+        success: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid image upload.',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Image file is required.',
+        success: false,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'Recommendations service unavailable.',
+    schema: {
+      example: {
+        statusCode: 503,
+        message: 'Recommendations service is unavailable.',
+        success: false,
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('image'))
+  async predictDental(@UploadedFile() image: Express.Multer.File) {
+    const data = await this.recommendationsService.predictDental(image);
+    return {
+      statusCode: 200,
+      message: 'Dental prediction completed successfully',
+      data,
+      success: true,
+    };
+  }
+
   @ApiOperation({ summary: 'Get latest recommendations for a patient' })
   @ApiParam({ name: 'patientId', description: 'Patient UUID', example: '550e8400-e29b-41d4-a716-446655440000' })
   @ApiResponse({

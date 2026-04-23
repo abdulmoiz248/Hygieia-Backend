@@ -15,6 +15,8 @@ FastAPI microservice that generates personalized patient recommendations using *
 - Downloads the trained model from Google Drive on startup if it is missing locally
 - Loads the model artifact into memory during startup
 - Predicts acne from an uploaded image
+- Downloads dental model artifacts from Google Drive (zip supported) when missing
+- Predicts dental conditions from an uploaded image
 
 ## Environment Variables
 
@@ -35,6 +37,9 @@ Optional:
 - `SCHEDULER_TIMEZONE` (default: `UTC`)
 - `RECOMMENDATIONS_MODEL_DRIVE_URL` (default: Google Drive shared file URL)
 - `RECOMMENDATIONS_MODEL_PATH` (default: `models/recommendation_model.pth`)
+- `DENTAL_MODEL_DRIVE_URL` (default: Google Drive shared file URL)
+- `DENTAL_MODEL_PATH` (default: `models/dental_model/best_model.pth`)
+- `DENTAL_MODEL_METADATA_PATH` (default: `models/dental_model/model_metadata.json`)
 - `MONGODB_URI` (optional profile enrichment)
 - `MONGODB_DATABASE` (default: `hygieia`)
 
@@ -45,6 +50,7 @@ Optional:
 - `GET /recommendations/{patient_id}/history?limit=10`
 - `GET /model/status`
 - `POST /predict-acne`
+- `POST /predict-dental`
 - `POST /recommendations/{patient_id}/refresh`
 - `POST /recommendations/refresh-all`
 

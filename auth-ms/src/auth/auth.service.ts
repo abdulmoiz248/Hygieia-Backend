@@ -803,7 +803,7 @@ export class AuthService {
 
     const { data, error } = await this.supabase.getClient()
       .from('users')
-      .select('role')
+      .select('role, created_at')
 
     if (error) {
       console.error(`[INFO: AUTH SERVICE] Failed to fetch user role counts: ${error.message}`)
@@ -811,19 +811,56 @@ export class AuthService {
     }
 
     const roleCounts = new Map<string, number>()
+    const now = new Date()
+    const monthBuckets = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1)
+      return {
+        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        label: date.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+        date,
+      }
+    })
+    const trendsByRole = new Map<string, Map<string, number>>()
 
     for (const row of data || []) {
       const role = this.normalizeRoleForCounts(row.role)
       roleCounts.set(role, (roleCounts.get(role) || 0) + 1)
+
+      if (!row.created_at) {
+        continue
+      }
+
+      const createdAt = new Date(row.created_at)
+      const monthKey = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`
+      if (!monthBuckets.some((bucket) => bucket.key === monthKey)) {
+        continue
+      }
+
+      if (!trendsByRole.has(role)) {
+        trendsByRole.set(role, new Map<string, number>())
+      }
+
+      const roleTrend = trendsByRole.get(role)!
+      roleTrend.set(monthKey, (roleTrend.get(monthKey) || 0) + 1)
     }
 
     const counts = Array.from(roleCounts.entries()).map(([role, count]) => ({ role, count }))
     const totalUsers = data?.length || 0
+    const roleTrends = Array.from(roleCounts.keys()).map((role) => ({
+      role,
+      total: roleCounts.get(role) || 0,
+      monthlyTrends: monthBuckets.map((bucket) => ({
+        month: bucket.key,
+        label: bucket.label,
+        count: trendsByRole.get(role)?.get(bucket.key) || 0,
+      })),
+    }))
 
     console.log(`[INFO: AUTH SERVICE] User role counts fetched successfully. Total users: ${totalUsers}`)
     return {
       totalUsers,
       roleCounts: counts,
+      roleTrends,
       success: true,
       message: 'User role counts fetched successfully',
     }

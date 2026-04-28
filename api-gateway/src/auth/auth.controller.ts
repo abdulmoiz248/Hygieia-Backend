@@ -147,7 +147,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Get user counts by role (Admin only)',
     description:
-      'Returns the total number of users grouped by role from the Supabase users table. This endpoint is intended for admin dashboards.',
+      'Returns the total number of users grouped by role from the Supabase users table, plus a per-role monthly trend for the previous 6 months. This endpoint is intended for admin dashboards.',
   })
   @ApiQuery({ name: 'userId', description: 'Authenticated admin user ID', required: true })
   @ApiResponse({
@@ -167,6 +167,20 @@ export class AuthController {
             { role: 'nutritionist', count: 18 },
             { role: 'lab_technician', count: 12 },
             { role: 'admin', count: 7 },
+          ],
+          roleTrends: [
+            {
+              role: 'patient',
+              total: 180,
+              monthlyTrends: [
+                { month: '2025-11', label: 'Nov 2025', count: 22 },
+                { month: '2025-12', label: 'Dec 2025', count: 28 },
+                { month: '2026-01', label: 'Jan 2026', count: 31 },
+                { month: '2026-02', label: 'Feb 2026', count: 29 },
+                { month: '2026-03', label: 'Mar 2026', count: 34 },
+                { month: '2026-04', label: 'Apr 2026', count: 36 },
+              ],
+            },
           ],
         },
       },

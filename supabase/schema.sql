@@ -265,6 +265,7 @@ CREATE TABLE IF NOT EXISTS "public"."lab_technician_profiles" (
     "gender" "text",
     "dateofbirth" "date",
     "personal_email" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
     CONSTRAINT "lab_technician_profiles_gender_check" CHECK (("gender" = ANY (ARRAY['male'::"text", 'Male'::"text", 'female'::"text", 'Female'::"text", 'other'::"text"])))
 );
 

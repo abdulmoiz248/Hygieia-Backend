@@ -1,4 +1,19 @@
-import { Controller, Get, Param, ParseUUIDPipe, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBody,
@@ -10,6 +25,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { RecommendationHistoryQueryDto } from './dto/recommendation-history-query.dto';
+import { ChatRequestDto } from './dto/chat-request.dto';
+import { ChatConfirmDto } from './dto/chat-confirm.dto';
+import { ChatConversationRenameDto } from './dto/chat-conversation-rename.dto';
+import { ChatConversationUnarchiveDto } from './dto/chat-conversation-unarchive.dto';
 import { RecommendationsService } from './recommendations.service';
 
 @ApiTags('Recommendations')
@@ -218,6 +237,147 @@ export class RecommendationsController {
     return {
       statusCode: 200,
       message: 'Dental prediction completed successfully',
+      data,
+      success: true,
+    };
+  }
+
+  @Post('chat')
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  @ApiOperation({ summary: 'Patient chatbot (LangGraph + Groq)' })
+  @ApiBody({ type: ChatRequestDto })
+  @ApiResponse({ status: 200, description: 'Chat turn completed' })
+  async postChat(@Body() body: ChatRequestDto, @Headers('authorization') authorization?: string) {
+    const data = await this.recommendationsService.chat({
+      patientId: body.patientId,
+      messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
+      conversationId: body.conversationId,
+      confirmActionToken: body.confirmActionToken,
+      authorization,
+    });
+    return {
+      statusCode: 200,
+      message: 'Chat message processed',
+      data,
+      success: true,
+    };
+  }
+
+  @Post('chat/confirm')
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  @ApiOperation({ summary: 'Confirm a pending chat action' })
+  @ApiBody({ type: ChatConfirmDto })
+  async postChatConfirm(@Body() body: ChatConfirmDto, @Headers('authorization') authorization?: string) {
+    const data = await this.recommendationsService.confirmChat({
+      patientId: body.patientId,
+      conversationId: body.conversationId,
+      actionToken: body.actionToken,
+      authorization,
+    });
+    return {
+      statusCode: 200,
+      message: 'Action confirmed',
+      data,
+      success: true,
+    };
+  }
+
+  @Get('chat/conversations/:patientId')
+  @ApiOperation({ summary: 'List patient chat conversations' })
+  @ApiParam({ name: 'patientId', format: 'uuid' })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @ApiQuery({ name: 'before', required: false })
+  @ApiQuery({ name: 'include_archived', required: false, example: false })
+  @ApiQuery({ name: 'search', required: false })
+  async getChatConversations(
+    @Param('patientId', ParseUUIDPipe) patientId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Query('include_archived') includeArchived?: string,
+    @Query('search') search?: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const li = limit ? Math.min(200, Math.max(1, parseInt(limit, 10) || 20)) : 20;
+    return this.recommendationsService.getChatConversations(
+      patientId,
+      {
+        limit: li,
+        before: before || undefined,
+        includeArchived: includeArchived === 'true',
+        search: search || undefined,
+      },
+      authorization,
+    );
+  }
+
+  @Get('chat/history/:patientId')
+  @ApiOperation({ summary: 'List chat message history' })
+  @ApiParam({ name: 'patientId', format: 'uuid' })
+  @ApiQuery({ name: 'conversation_id', required: false })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  @ApiQuery({ name: 'before', required: false })
+  async getChatHistory(
+    @Param('patientId', ParseUUIDPipe) patientId: string,
+    @Query('conversation_id') conversationId?: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const li = limit ? Math.min(200, Math.max(1, parseInt(limit, 10) || 50)) : 50;
+    const data = await this.recommendationsService.getChatHistory(patientId, {
+      conversationId: conversationId || undefined,
+      limit: li,
+      before: before || undefined,
+    }, authorization);
+    return {
+      statusCode: 200,
+      message: 'Chat history',
+      data,
+      success: true,
+    };
+  }
+
+  @Patch('chat/:conversationId/title')
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  @ApiOperation({ summary: 'Rename a chat conversation' })
+  @ApiParam({ name: 'conversationId', format: 'uuid' })
+  @ApiBody({ type: ChatConversationRenameDto })
+  async renameChatConversation(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body() body: ChatConversationRenameDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const data = await this.recommendationsService.renameChatConversation(conversationId, body, authorization);
+    return { statusCode: 200, message: 'Conversation renamed', data, success: true };
+  }
+
+  @Post('chat/:conversationId/unarchive')
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  @ApiOperation({ summary: 'Unarchive a chat conversation' })
+  @ApiParam({ name: 'conversationId', format: 'uuid' })
+  @ApiBody({ type: ChatConversationUnarchiveDto })
+  async unarchiveChatConversation(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body() body: ChatConversationUnarchiveDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const data = await this.recommendationsService.unarchiveChatConversation(conversationId, body, authorization);
+    return { statusCode: 200, message: 'Conversation unarchived', data, success: true };
+  }
+
+  @Delete('chat/:conversationId')
+  @ApiOperation({ summary: 'Archive a chat session' })
+  @ApiParam({ name: 'conversationId', format: 'uuid' })
+  @ApiQuery({ name: 'patient_id', required: true, description: 'Patient who owns the conversation' })
+  async deleteChat(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Query('patient_id', ParseUUIDPipe) patientId: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const data = await this.recommendationsService.deleteChat(patientId, conversationId, authorization);
+    return {
+      statusCode: 200,
+      message: 'Chat session archived',
       data,
       success: true,
     };

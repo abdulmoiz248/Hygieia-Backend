@@ -1,17 +1,19 @@
-import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile, status
+from fastapi import FastAPI, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Optional
 
 from services.recommendation_service import RecommendationService
+from services.chatbot.service import ChatbotService
 
 load_dotenv()
 
@@ -26,6 +28,7 @@ logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 service: RecommendationService | None = None
+chatbot: ChatbotService | None = None
 scheduler: AsyncIOScheduler | None = None
 
 
@@ -106,6 +109,33 @@ class RootResponse(BaseModel):
     timestamp: str
 
 
+class ChatMessageIn(BaseModel):
+    role: str = "user"
+    content: str
+
+
+class ChatRequestBody(BaseModel):
+    patient_id: str = Field(..., description="Patient (user) UUID")
+    messages: List[ChatMessageIn] = Field(..., min_length=1)
+    conversation_id: str | None = None
+    confirm_action_token: str | None = None
+
+
+class ChatConfirmBody(BaseModel):
+    patient_id: str
+    conversation_id: str
+    action_token: str
+
+
+class ChatConversationRenameBody(BaseModel):
+    patient_id: str
+    title: str = Field(..., min_length=1, max_length=80)
+
+
+class ChatConversationUnarchiveBody(BaseModel):
+    patient_id: str
+
+
 async def run_generation_job(trigger: str) -> None:
     if not service:
         logger.warning("Recommendation service not initialized; skipping %s run", trigger)
@@ -124,9 +154,10 @@ async def run_generation_job(trigger: str) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global service, scheduler
+    global service, chatbot, scheduler
 
     service = RecommendationService()
+    chatbot = ChatbotService(recommendation_service=service)
     await service.ensure_model_ready()
     await service.ensure_dental_model_ready()
 
@@ -156,6 +187,121 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.post("/chat", tags=["Chat"], summary="Patient chatbot (LangGraph + Groq)")
+async def post_chat(
+    body: ChatRequestBody,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    if not chatbot:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+    return await chatbot.handle_message(
+        body.patient_id,
+        [m.model_dump() for m in body.messages],
+        body.conversation_id,
+        body.confirm_action_token,
+        auth_header=authorization,
+    )
+
+
+@app.post("/chat/confirm", tags=["Chat"], summary="Confirm a pending write action")
+async def post_chat_confirm(
+    body: ChatConfirmBody,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    if not chatbot:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+    return await chatbot.confirm_action(
+        body.patient_id,
+        body.conversation_id,
+        body.action_token,
+        authorization,
+        time.time(),
+    )
+
+
+@app.get("/chat/conversations/{patient_id}", tags=["Chat"], summary="List patient conversations")
+async def get_chat_conversations(
+    patient_id: str,
+    limit: int = Query(20, ge=1, le=200),
+    before: str | None = None,
+    include_archived: bool = Query(False),
+    search: str | None = None,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    if not chatbot:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+    try:
+        return await chatbot.get_conversations(patient_id, limit, before, include_archived, search, authorization)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@app.get("/chat/history/{patient_id}", tags=["Chat"], summary="Chat message history")
+async def get_chat_history(
+    patient_id: str,
+    conversation_id: str | None = Query(default=None, alias="conversation_id"),
+    limit: int = Query(50, ge=1, le=200),
+    before: str | None = None,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    if not chatbot:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+    try:
+        return await chatbot.get_history(patient_id, conversation_id, limit, before, authorization)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@app.patch("/chat/{conversation_id}/title", tags=["Chat"], summary="Rename a chat conversation")
+async def patch_chat_title(
+    conversation_id: str,
+    body: ChatConversationRenameBody,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    if not chatbot:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+    try:
+        return await chatbot.rename_conversation(body.patient_id, conversation_id, body.title, authorization)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+
+@app.post("/chat/{conversation_id}/unarchive", tags=["Chat"], summary="Unarchive a chat conversation")
+async def post_chat_unarchive(
+    conversation_id: str,
+    body: ChatConversationUnarchiveBody,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    if not chatbot:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+    try:
+        return await chatbot.unarchive_conversation(body.patient_id, conversation_id, authorization)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+
+@app.delete("/chat/{conversation_id}", tags=["Chat"], summary="Archive a chat session")
+async def delete_chat(
+    conversation_id: str,
+    patient_id: str = Query(..., description="Required to verify ownership"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    if not chatbot:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+    try:
+        chatbot._require_owner(patient_id, authorization)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    n = await chatbot.delete_conversation(patient_id, conversation_id)
+    if not n:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    return {"ok": True, "conversation_id": conversation_id, "archived_at": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/", response_model=RootResponse, summary="Service root", tags=["System"])

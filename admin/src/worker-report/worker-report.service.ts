@@ -13,6 +13,25 @@ type WorkerUser = {
   personal_email?: string | null;
 };
 
+type WorkerProfile = {
+  id: string;
+  name?: string | null;
+  phone?: string | null;
+  gender?: string | null;
+  dateofbirth?: string | null;
+  img?: string | null;
+  personalEmail?: string | null;
+  specialization?: string | null;
+  licenseNumber?: string | null;
+  yearsOfExperience?: number | null;
+  qualifications?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  bio?: string | null;
+};
+
 type DateLike = string | Date | null | undefined;
 
 @Injectable()
@@ -40,12 +59,15 @@ export class WorkerReportService {
       throw new BadRequestException('Provided user is not a worker');
     }
 
-    const [notificationsSummary, roleData] = await Promise.all([
+    const [notificationsSummary, roleData, workerProfile] = await Promise.all([
       this.getNotificationSummary(workerId),
       this.getRoleSpecificData(workerId, worker.role),
+      this.getWorkerProfile(workerId, worker.role),
     ]);
 
     const accountAgeDays = this.getAccountAgeDays(worker.created_at);
+    const performanceIndicators = this.calculatePerformanceIndicators(worker.role, roleData.metrics);
+    const engagementMetrics = this.calculateEngagementMetrics(roleData.metrics, accountAgeDays);
 
     return {
       reportGeneratedAt: new Date().toISOString(),
@@ -53,33 +75,188 @@ export class WorkerReportService {
         monthlyTrendMonths: 12,
         newPatientTrendDays: 7,
       },
-      worker: {
-        id: worker.id,
-        email: worker.email,
-        role: worker.role,
-        isVerified: worker.is_verified,
-        personalEmail: worker.personal_email || null,
-        createdAt: worker.created_at,
-        updatedAt: worker.updated_at,
+      workerDetails: {
+        profile: {
+          id: worker.id,
+          email: worker.email,
+          role: worker.role,
+          isVerified: worker.is_verified,
+          personalEmail: worker.personal_email || null,
+          createdAt: worker.created_at,
+          updatedAt: worker.updated_at,
+          ...workerProfile,
+        },
       },
       overview: {
         accountAgeDays,
+        accountStatus: this.getAccountStatus(accountAgeDays),
+        registrationDate: worker.created_at,
+        lastActive: worker.updated_at,
         notifications: notificationsSummary.counts,
         patients: roleData.patientsOverview,
+        performanceLevel: performanceIndicators.overallPerformanceLevel,
       },
-      metrics: roleData.metrics,
-      analytics: roleData.analytics,
+      metrics: {
+        core: roleData.metrics,
+        engagement: engagementMetrics,
+        efficiency: this.calculateEfficiencyMetrics(roleData.metrics, accountAgeDays),
+      },
+      analytics: {
+        ...roleData.analytics,
+        performance: performanceIndicators.detailedMetrics,
+      },
       recentActivity: {
         notifications: notificationsSummary.recent,
         ...roleData.recent,
       },
       detailed: roleData.detailed,
       insights: this.buildInsights(worker.role, roleData.metrics, notificationsSummary.counts.unread),
+      recommendations: this.buildRecommendations(worker.role, roleData.metrics, performanceIndicators),
     };
   }
 
   private isWorkerRole(role: string): role is WorkerRole {
     return role === 'doctor' || role === 'nutritionist' || role === 'lab_technician';
+  }
+
+  private getAccountStatus(ageDays: number): string {
+    if (ageDays < 30) return 'new';
+    if (ageDays < 90) return 'developing';
+    if (ageDays < 365) return 'established';
+    return 'veteran';
+  }
+
+  private async getWorkerProfile(workerId: string, role: WorkerRole): Promise<Partial<WorkerProfile>> {
+    const supabase = this.supabaseService.getClient();
+
+    if (role === 'lab_technician') {
+      const { data, error } = await supabase
+        .from('lab_technician_profiles')
+        .select('id, name, phone, gender, dateofbirth, img, personal_email')
+        .eq('id', workerId)
+        .single();
+
+      if (error || !data) {
+        return {};
+      }
+
+      return {
+        name: data.name || null,
+        phone: data.phone || null,
+        gender: data.gender || null,
+        dateofbirth: data.dateofbirth || null,
+        img: data.img || null,
+        personalEmail: data.personal_email || null,
+      };
+    }
+
+    // For doctors and nutritionists, fetch extended user data
+    // In a real scenario, you'd have doctor_profiles or nutritionist_profiles tables
+    // For now, we return limited profile data from users table
+    return {
+      personalEmail: null,
+    };
+  }
+
+  private calculatePerformanceIndicators(
+    role: WorkerRole,
+    metrics: Record<string, any>,
+  ): {
+    overallPerformanceLevel: string;
+    detailedMetrics: Record<string, any>;
+  } {
+    const indicators: Record<string, any> = {};
+
+    if (role === 'doctor') {
+      const completionRate = metrics.completionRate || 0;
+      const averageRating = metrics.averageRating || 0;
+      const returningPatients = metrics.returningPatients || 0;
+      const newPatientsLast7Days = metrics.newPatientsLast7Days || 0;
+
+      indicators.appointmentThroughput = metrics.totalAppointments || 0;
+      indicators.qualityScore = Number(((completionRate + Math.min(averageRating * 20, 100)) / 2).toFixed(2));
+      indicators.patientRetentionRate = metrics.uniquePatients > 0 ? 
+        Number(((returningPatients / metrics.uniquePatients) * 100).toFixed(2)) : 0;
+      indicators.growthMomentum = newPatientsLast7Days > 0 ? 'positive' : 'stable';
+      indicators.prescriptionCompliance = metrics.activePrescriptions > 0 ? 'active' : 'low';
+      indicators.referralEffectiveness = metrics.totalReferrals > 0 ? 
+        Number(((metrics.dismissedReferrals / metrics.totalReferrals) * 100).toFixed(2)) : 0;
+    } else if (role === 'nutritionist') {
+      const completionRate = metrics.completionRate || 0;
+      const averageRating = metrics.averageRating || 0;
+      const activeDietPlans = metrics.activeDietPlans || 0;
+
+      indicators.appointmentConsistency = completionRate;
+      indicators.qualityScore = Number(((completionRate + Math.min(averageRating * 20, 100)) / 2).toFixed(2));
+      indicators.activePlanEngagement = activeDietPlans;
+      indicators.patientSatisfactionScore = averageRating;
+      indicators.dietPlanAdherenceRate = metrics.totalDietPlans > 0 ?
+        Number(((activeDietPlans / metrics.totalDietPlans) * 100).toFixed(2)) : 0;
+    } else if (role === 'lab_technician') {
+      const completionRate = metrics.completionRate || 0;
+      const uniquePatients = metrics.uniquePatients || 0;
+      const pendingBookings = metrics.pendingBookings || 0;
+
+      indicators.labTestThroughput = metrics.totalLabBookings || 0;
+      indicators.completionEfficiency = completionRate;
+      indicators.patientServed = uniquePatients;
+      indicators.workloadBalance = pendingBookings > 5 ? 'high' : pendingBookings > 0 ? 'moderate' : 'low';
+    }
+
+    const overallScore = Object.values(indicators).reduce((sum: number, val: any) => {
+      if (typeof val === 'number') return sum + val;
+      return sum;
+    }, 0) / Object.keys(indicators).length;
+
+    let level = 'average';
+    if (overallScore >= 80) level = 'excellent';
+    else if (overallScore >= 60) level = 'good';
+    else if (overallScore >= 40) level = 'fair';
+    else level = 'needs-improvement';
+
+    return {
+      overallPerformanceLevel: level,
+      detailedMetrics: indicators,
+    };
+  }
+
+  private calculateEngagementMetrics(metrics: Record<string, any>, accountAgeDays: number): Record<string, any> {
+    return {
+      accountMaturity: accountAgeDays,
+      accountTier: accountAgeDays < 30 ? 'new' : accountAgeDays < 365 ? 'active' : 'established',
+      totalInteractions: (metrics.totalAppointments || 0) + (metrics.totalDietPlans || 0) + (metrics.totalLabBookings || 0),
+      monthlyActivityAverage: Math.max(
+        (metrics.totalAppointments || 0) / 12,
+        (metrics.totalDietPlans || 0) / 12,
+        (metrics.totalLabBookings || 0) / 12
+      ),
+      patientEngagementRate: metrics.uniquePatients > 0 ? Number(((metrics.uniquePatients / accountAgeDays).toFixed(4))) : 0,
+    };
+  }
+
+  private calculateEfficiencyMetrics(metrics: Record<string, any>, accountAgeDays: number): Record<string, any> {
+    const efficiencyMetrics: Record<string, any> = {};
+
+    if (metrics.totalAppointments) {
+      efficiencyMetrics.appointmentsPerDay = (metrics.totalAppointments / Math.max(accountAgeDays, 1)).toFixed(2);
+      efficiencyMetrics.completionRatePercentage = metrics.completionRate || 0;
+      efficiencyMetrics.cancellationRatePercentage = metrics.totalAppointments > 0 ? 
+        Number(((metrics.cancelledAppointments / metrics.totalAppointments) * 100).toFixed(2)) : 0;
+      efficiencyMetrics.onlineVsPhysicalRatio = metrics.totalAppointments > 0 ?
+        Number(((metrics.onlineAppointments || 0) / metrics.totalAppointments).toFixed(2)) : 0;
+    }
+
+    if (metrics.totalDietPlans) {
+      efficiencyMetrics.dietPlanActivationRate = metrics.totalDietPlans > 0 ?
+        Number(((metrics.activeDietPlans / metrics.totalDietPlans) * 100).toFixed(2)) : 0;
+    }
+
+    if (metrics.totalLabBookings) {
+      efficiencyMetrics.labBookingCompletionRate = metrics.completionRate || 0;
+      efficiencyMetrics.avgBookingsPerDay = (metrics.totalLabBookings / Math.max(accountAgeDays, 1)).toFixed(2);
+    }
+
+    return efficiencyMetrics;
   }
 
   private getAccountAgeDays(createdAt: string): number {
@@ -851,37 +1028,72 @@ export class WorkerReportService {
 
     if (typeof metrics.completionRate === 'number') {
       if (metrics.completionRate >= 80) {
-        insights.push('High completion performance observed.');
+        insights.push('⭐ High completion performance observed - consider using this as a benchmark.');
+      } else if (metrics.completionRate >= 60) {
+        insights.push('Good completion rate with room for improvement.');
       } else if (metrics.completionRate < 50) {
-        insights.push('Completion rate is low and may need follow-up.');
+        insights.push('⚠️ Completion rate is low and may need follow-up and support.');
       }
     }
 
-    if (unreadNotifications > 20) {
-      insights.push('Large unread notification backlog detected.');
-    }
-
-    if (role === 'doctor' && metrics.pendingReferrals > metrics.dismissedReferrals) {
-      insights.push('More pending referrals than dismissed referrals.');
-    }
-
-    if (role === 'nutritionist' && metrics.activeDietPlans === 0 && metrics.totalDietPlans > 0) {
-      insights.push('No active diet plans currently running.');
-    }
-
-    if (role === 'lab_technician' && metrics.pendingBookings > metrics.completedBookings) {
-      insights.push('Pending lab workload is currently higher than completed tests.');
-    }
-
-    if (typeof metrics.newPatientsLast7Days === 'number' && metrics.newPatientsLast7Days > 0) {
-      insights.push(`${metrics.newPatientsLast7Days} new patient(s) were added in the last 7 days.`);
+    if (unreadNotifications > 50) {
+      insights.push('🔔 Large unread notification backlog detected - prioritize communications.');
+    } else if (unreadNotifications > 20) {
+      insights.push('Multiple unread notifications pending attention.');
     }
 
     if (typeof metrics.averageRating === 'number' && metrics.averageRating > 0) {
-      if (metrics.averageRating >= 4.5) {
-        insights.push('Patient feedback trend is excellent based on recent ratings.');
+      if (metrics.averageRating >= 4.7) {
+        insights.push('⭐ Exceptional patient satisfaction with 4.7+ average rating.');
+      } else if (metrics.averageRating >= 4.5) {
+        insights.push('Excellent patient feedback trend based on recent ratings.');
+      } else if (metrics.averageRating >= 4.0) {
+        insights.push('Good patient satisfaction level with consistent positive feedback.');
       } else if (metrics.averageRating < 3.5) {
-        insights.push('Patient feedback trend is below target and may need quality review.');
+        insights.push('⚠️ Patient feedback trend is below target and may need quality review.');
+      }
+    }
+
+    if (role === 'doctor') {
+      if (metrics.pendingReferrals && metrics.dismissedReferrals) {
+        const pendingRatio = metrics.pendingReferrals / (metrics.totalReferrals || 1);
+        if (pendingRatio > 0.7) {
+          insights.push('Most referrals are pending - ensure timely referral processing.');
+        }
+      }
+      if (metrics.newPatientsLast7Days > metrics.uniquePatients * 0.1) {
+        insights.push('Strong patient acquisition momentum in the last week.');
+      }
+    }
+
+    if (role === 'nutritionist') {
+      if (metrics.activeDietPlans === 0 && metrics.totalDietPlans > 0) {
+        insights.push('No active diet plans currently running - consider outreach to patients.');
+      } else if (metrics.activeDietPlans > metrics.totalDietPlans * 0.5) {
+        insights.push('High engagement rate with active diet plans - excellent patient retention.');
+      }
+    }
+
+    if (role === 'lab_technician') {
+      if (metrics.pendingBookings > metrics.completedBookings) {
+        insights.push('Pending lab workload is currently higher than completed tests - manage queue efficiently.');
+      }
+      if (metrics.completionRate >= 90) {
+        insights.push('Excellent lab test completion rate - maintaining high operational efficiency.');
+      }
+    }
+
+    if (typeof metrics.newPatientsLast7Days === 'number' && metrics.newPatientsLast7Days > 0) {
+      const growthText = metrics.newPatientsLast7Days > 5 ? 'strong' : 'steady';
+      insights.push(`${growthText.charAt(0).toUpperCase() + growthText.slice(1)} growth with ${metrics.newPatientsLast7Days} new patient(s) added in the last 7 days.`);
+    }
+
+    if (metrics.returningPatients && metrics.uniquePatients) {
+      const retentionRate = (metrics.returningPatients / metrics.uniquePatients) * 100;
+      if (retentionRate > 60) {
+        insights.push('🎯 Strong patient retention rate - patients are returning regularly.');
+      } else if (retentionRate > 30) {
+        insights.push('Moderate patient retention rate with room to improve follow-up engagement.');
       }
     }
 
@@ -890,5 +1102,61 @@ export class WorkerReportService {
     }
 
     return insights;
+  }
+
+  private buildRecommendations(
+    role: WorkerRole,
+    metrics: Record<string, any>,
+    performanceIndicators: any,
+  ): string[] {
+    const recommendations: string[] = [];
+
+    // General recommendations
+    if (performanceIndicators.overallPerformanceLevel === 'excellent') {
+      recommendations.push('Continue maintaining current service standards and consider mentoring peers.');
+    } else if (performanceIndicators.overallPerformanceLevel === 'good') {
+      recommendations.push('Strong performance - identify specific areas for optimization.');
+    } else if (performanceIndicators.overallPerformanceLevel === 'fair') {
+      recommendations.push('Schedule performance review and create improvement plan.');
+    } else if (performanceIndicators.overallPerformanceLevel === 'needs-improvement') {
+      recommendations.push('🔴 Urgent: Implement immediate performance improvement measures.');
+    }
+
+    if (role === 'doctor') {
+      if (metrics.completionRate < 70) {
+        recommendations.push('Focus on completing scheduled appointments - implement reminder system.');
+      }
+      if (metrics.lowRatingReviews > metrics.totalReviews * 0.1) {
+        recommendations.push('Address quality concerns reflected in patient reviews - consider additional training.');
+      }
+      if (metrics.newPatientsLast30Days === 0) {
+        recommendations.push('No new patient acquisition in last 30 days - enhance marketing visibility.');
+      }
+      if (metrics.pendingReferrals > 50) {
+        recommendations.push('Large pending referral backlog - prioritize referral follow-ups.');
+      }
+    } else if (role === 'nutritionist') {
+      if (metrics.activeDietPlans < metrics.uniquePatients * 0.2) {
+        recommendations.push('Increase active diet plan engagement - follow up with inactive patients.');
+      }
+      if (metrics.completionRate < 75) {
+        recommendations.push('Improve appointment completion rate - consider scheduling optimization.');
+      }
+      if (metrics.averageRating < 4.0) {
+        recommendations.push('Enhance patient satisfaction - gather detailed feedback on service gaps.');
+      }
+    } else if (role === 'lab_technician') {
+      if (metrics.pendingBookings > 20) {
+        recommendations.push('Manage pending booking queue - allocate resources to reduce wait times.');
+      }
+      if (metrics.completionRate < 80) {
+        recommendations.push('Improve test completion rate - identify bottlenecks in the process.');
+      }
+      if (metrics.uniquePatients < metrics.totalLabBookings * 0.5) {
+        recommendations.push('Low unique patient ratio - encourage patient base diversification.');
+      }
+    }
+
+    return recommendations;
   }
 }

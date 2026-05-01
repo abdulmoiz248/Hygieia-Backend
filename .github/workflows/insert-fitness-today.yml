@@ -4,13 +4,13 @@ on:
   schedule:
     # 12:00 UTC == 17:00 PKT (Pakistan Standard Time, UTC+5)
     - cron: '0 12 * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   insert-fitness:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Node.js
@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: npm install @supabase/supabase-js
 
-      - name: Insert today's PKT fitness entries (Supabase)
+      - name: Insert today's PKT fitness entries (skip existing)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -32,86 +32,101 @@ jobs:
           fi
 
           cat <<'JS' > /tmp/insert_fitness_today.js
-          (async () => {
-            const { createClient } = require('@supabase/supabase-js');
-            const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+          const { createClient } = require('@supabase/supabase-js');
 
+          function getPktDateStrings() {
             const now = new Date();
             const pktMs = now.getTime() + 5 * 60 * 60 * 1000;
             const pkt = new Date(pktMs);
+
             const y = pkt.getUTCFullYear();
             const m = String(pkt.getUTCMonth() + 1).padStart(2, '0');
             const d = String(pkt.getUTCDate()).padStart(2, '0');
             const pktDate = `${y}-${m}-${d}`;
-            const nextDateObj = new Date(pktMs + 24 * 60 * 60 * 1000);
-            const ny = nextDateObj.getUTCFullYear();
-            const nm = String(nextDateObj.getUTCMonth() + 1).padStart(2, '0');
-            const nd = String(nextDateObj.getUTCDate()).padStart(2, '0');
+
+            const nextPkt = new Date(pktMs + 24 * 60 * 60 * 1000);
+            const ny = nextPkt.getUTCFullYear();
+            const nm = String(nextPkt.getUTCMonth() + 1).padStart(2, '0');
+            const nd = String(nextPkt.getUTCDate()).padStart(2, '0');
             const pktNextDate = `${ny}-${nm}-${nd}`;
 
-            console.log('PKT date:', pktDate);
+            return { pktDate, pktNextDate };
+          }
 
-            const { data: patients, error: pErr } = await supabase
+          function randomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+          }
+
+          async function run() {
+            const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+            const { pktDate, pktNextDate } = getPktDateStrings();
+
+            const fromTs = `${pktDate}T00:00:00+05:00`;
+            const toTs = `${pktNextDate}T00:00:00+05:00`;
+            const createdAt = `${pktDate}T12:00:00+05:00`;
+
+            console.log('PKT date window:', fromTs, 'to', toTs);
+
+            const { data: patients, error: patientErr } = await supabase
               .from('users')
               .select('id')
               .eq('role', 'patient');
 
-            if (pErr) { console.error('Failed to fetch patients', pErr); process.exit(1); }
-
-            for (const p of patients || []) {
-              const fromTs = `${pktDate}T00:00:00+05:00`;
-              const toTs = `${pktNextDate}T00:00:00+05:00`;
-
-              const { data: existing, error: eErr } = await supabase
-                .from('fitness')
-                .select('id')
-                .eq('patient_id', p.id)
-                .gte('created_at', fromTs)
-                .lt('created_at', toTs)
-                .limit(1);
-
-              if (eErr) { console.error('Failed to check existing fitness for', p.id, eErr); continue; }
-              if (existing && existing.length > 0) {
-                console.log('Skipping existing for', p.id);
-                continue;
-              }
-
-              const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-              const steps = rnd(1000, 10000);
-              const water = Number((Math.random() * 2.5 + 0.5).toFixed(2));
-              const sleep = Number((Math.random() * 4 + 4).toFixed(2));
-              const calories_burned = rnd(200, 1000);
-              const calories_intake = rnd(1200, 2700);
-              const fat = Number((Math.random() * 60 + 10).toFixed(2));
-              const protein = Number((Math.random() * 80 + 10).toFixed(2));
-              const carbs = Number((Math.random() * 250 + 50).toFixed(2));
-              const walk_calories_burned = Number((Math.random() * 200).toFixed(2));
-
-              const created_at = `${pktDate}T12:00:00+05:00`;
-
-              const { data: ins, error: insErr } = await supabase
-                .from('fitness')
-                .insert([{
-                  patient_id: p.id,
-                  created_at,
-                  steps,
-                  water,
-                  sleep,
-                  calories_burned,
-                  calories_intake,
-                  fat,
-                  protein,
-                  carbs,
-                  walk_calories_burned
-                }]);
-
-              if (insErr) {
-                console.error('Insert failed for', p.id, insErr);
-              } else {
-                console.log('Inserted fitness for', p.id);
-              }
+            if (patientErr) {
+              console.error('Failed to fetch patients:', patientErr);
+              process.exit(1);
             }
 
-            console.log('Done');
-          })().catch(e => { console.error(e); process.exit(1); });
+            const { data: existingRows, error: existingErr } = await supabase
+              .from('fitness')
+              .select('patient_id')
+              .gte('created_at', fromTs)
+              .lt('created_at', toTs);
 
+            if (existingErr) {
+              console.error('Failed to fetch existing fitness rows:', existingErr);
+              process.exit(1);
+            }
+
+            const existingPatientIds = new Set((existingRows || []).map((r) => r.patient_id));
+
+            const rowsToInsert = (patients || [])
+              .filter((p) => !existingPatientIds.has(p.id))
+              .map((p) => ({
+                patient_id: p.id,
+                created_at: createdAt,
+                steps: randomInt(1000, 10000),
+                water: Number((Math.random() * 2.5 + 0.5).toFixed(2)),
+                sleep: Number((Math.random() * 4 + 4).toFixed(2)),
+                calories_burned: randomInt(200, 1000),
+                calories_intake: randomInt(1200, 2700),
+                fat: Number((Math.random() * 60 + 10).toFixed(2)),
+                protein: Number((Math.random() * 80 + 10).toFixed(2)),
+                carbs: Number((Math.random() * 250 + 50).toFixed(2)),
+                walk_calories_burned: Number((Math.random() * 200).toFixed(2))
+              }));
+
+            if (rowsToInsert.length === 0) {
+              console.log('No inserts needed: all patients already have a fitness entry for today (PKT).');
+              return;
+            }
+
+            const { error: insertErr } = await supabase
+              .from('fitness')
+              .insert(rowsToInsert);
+
+            if (insertErr) {
+              console.error('Insert failed:', insertErr);
+              process.exit(1);
+            }
+
+            console.log(`Inserted ${rowsToInsert.length} fitness rows for PKT date ${pktDate}.`);
+          }
+
+          run().catch((err) => {
+            console.error('Unhandled error:', err);
+            process.exit(1);
+          });
+          JS
+
+          node /tmp/insert_fitness_today.js

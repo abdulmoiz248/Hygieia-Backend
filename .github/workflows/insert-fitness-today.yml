@@ -1,0 +1,119 @@
+name: Insert daily fitness (PKT 17:00)
+
+on:
+  schedule:
+    # 12:00 UTC == 17:00 PKT (Pakistan Standard Time, UTC+5)
+    - cron: '0 12 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  insert-fitness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Insert today's PKT fitness entries (Supabase)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "ERROR: SUPABASE_URL or SUPABASE_KEY secret is not set" >&2
+            exit 1
+          fi
+
+          node -e "(async () => {
+            const { createClient } = require('@supabase/supabase-js')
+            const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
+
+            // Compute PKT date (UTC +5)
+            const now = new Date()
+            const pktMs = now.getTime() + 5 * 60 * 60 * 1000
+            const pkt = new Date(pktMs)
+            const y = pkt.getUTCFullYear()
+            const m = String(pkt.getUTCMonth() + 1).padStart(2, '0')
+            const d = String(pkt.getUTCDate()).padStart(2, '0')
+            const pktDate = `${y}-${m}-${d}`
+            const nextDate = new Date(pktMs + 24 * 60 * 60 * 1000)
+            const ny = nextDate.getUTCFullYear()
+            const nm = String(nextDate.getUTCMonth() + 1).padStart(2, '0')
+            const nd = String(nextDate.getUTCDate()).padStart(2, '0')
+            const pktNextDate = `${ny}-${nm}-${nd}`
+
+            console.log('PKT date:', pktDate)
+
+            // Fetch patients
+            const { data: patients, error: pErr } = await supabase
+              .from('users')
+              .select('id')
+              .eq('role', 'patient')
+
+            if (pErr) { console.error('Failed to fetch patients', pErr); process.exit(1) }
+
+            for (const p of patients || []) {
+              // Check if a fitness row exists for this PKT date
+              const fromTs = `${pktDate}T00:00:00+05:00`
+              const toTs = `${pktNextDate}T00:00:00+05:00`
+
+              const { data: existing, error: eErr } = await supabase
+                .from('fitness')
+                .select('id')
+                .eq('patient_id', p.id)
+                .gte('created_at', fromTs)
+                .lt('created_at', toTs)
+                .limit(1)
+
+              if (eErr) { console.error('Failed to check existing fitness for', p.id, eErr); continue }
+              if (existing && existing.length > 0) {
+                console.log('Skipping existing for', p.id)
+                continue
+              }
+
+              // Build random values
+              const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
+              const steps = rnd(1000, 10000)
+              const water = (Math.random() * 2.5 + 0.5).toFixed(2)
+              const sleep = (Math.random() * 4 + 4).toFixed(2)
+              const calories_burned = rnd(200, 1000)
+              const calories_intake = rnd(1200, 2700)
+              const fat = (Math.random() * 60 + 10).toFixed(2)
+              const protein = (Math.random() * 80 + 10).toFixed(2)
+              const carbs = (Math.random() * 250 + 50).toFixed(2)
+              const walk_calories_burned = (Math.random() * 200).toFixed(2)
+
+              // created_at at noon PKT
+              const created_at = `${pktDate}T12:00:00+05:00`
+
+              const { data: ins, error: insErr } = await supabase
+                .from('fitness')
+                .insert([{ patient_id: p.id,
+                  created_at,
+                  steps,
+                  water,
+                  sleep,
+                  calories_burned,
+                  calories_intake,
+                  fat,
+                  protein,
+                  carbs,
+                  walk_calories_burned
+                }])
+
+              if (insErr) {
+                console.error('Insert failed for', p.id, insErr)
+              } else {
+                console.log('Inserted fitness for', p.id)
+              }
+            }
+
+            console.log('Done')
+          })().catch(e=>{console.error(e); process.exit(1)})"

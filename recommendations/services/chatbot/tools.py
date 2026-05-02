@@ -458,7 +458,8 @@ def human_summary_for_write(name: str, args: dict[str, Any]) -> str:
     if name == "write_cancel_appointment":
         return f"Cancel appointment {args.get('appointment_id')}"
     if name == "write_book_lab_test":
-        return f"Book lab test {args.get('testId')} for {args.get('scheduledDate')} {args.get('scheduledTime')}"
+        loc_str = f" at {args.get('location')}" if args.get('location') else ""
+        return f"Book lab test on {args.get('scheduledDate')} at {args.get('scheduledTime')}{loc_str}"
     if name == "write_cancel_lab_booking":
         return f"Cancel lab booking {args.get('booking_id')}"
     if name == "write_log_medication_taken":

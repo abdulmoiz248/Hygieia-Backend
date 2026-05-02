@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import os
+import datetime
 from typing import Any
 
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -94,7 +95,8 @@ def build_system_prompt() -> str:
            "Default appointment type: 'consultation'. Default mode: 'physical'.\n"
         "The patient is already known from the session: never ask for the patient’s UUID. "
         "If data is empty, say so. Keep answers concise. "
-        "Do not provide medical diagnosis or change prescriptions yourself."
+        "Do not provide medical diagnosis or change prescriptions yourself.\n\n"
+        f"Today's Date: {datetime.date.today().isoformat()}"
     )
 
 

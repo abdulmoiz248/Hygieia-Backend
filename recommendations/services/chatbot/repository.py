@@ -3,8 +3,10 @@ from __future__ import annotations
 import logging
 import uuid
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, List, Optional
+
+PKT = timezone(timedelta(hours=5), name="PKT")
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
 from pymongo import ASCENDING, DESCENDING
@@ -69,7 +71,7 @@ class ChatRepository:
 
     @staticmethod
     def _cursor_key(dt: datetime, item_id: str) -> str:
-        return f"{dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')}|{item_id}"
+        return f"{dt.astimezone(PKT).isoformat()}|{item_id}"
 
     @staticmethod
     def _parse_cursor(cursor: str | None) -> datetime | None:
@@ -77,7 +79,7 @@ class ChatRepository:
             return None
         try:
             raw = cursor.split("|", 1)[0]
-            raw = raw.replace("Z", "+00:00") if raw.endswith("Z") else raw
+            raw = raw.replace("Z", "+00:00")
             return datetime.fromisoformat(raw)
         except Exception:
             return None
@@ -85,7 +87,7 @@ class ChatRepository:
     @staticmethod
     def _dt_to_iso(value: Any) -> str:
         if isinstance(value, datetime):
-            return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            return value.astimezone(PKT).isoformat()
         if value:
             return str(value)
         return ""
@@ -131,14 +133,14 @@ class ChatRepository:
                 return await self._new_session(patient_id, title)
             await self._sessions().update_one(
                 {"conversation_id": conversation_id},
-                {"$set": {"last_activity": datetime.now(timezone.utc)}},
+                {"$set": {"last_activity": datetime.now(PKT)}},
             )
             return conversation_id
         return await self._new_session(patient_id, title)
 
     async def _new_session(self, patient_id: str, title: str) -> str:
         cid = str(uuid.uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(PKT)
         await self._sessions().insert_one(
             {
                 "conversation_id": cid,
@@ -167,7 +169,7 @@ class ChatRepository:
         pending_action: dict[str, Any] | None = None,
     ) -> str:
         await self.connect()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(PKT)
         mid = str(uuid.uuid4())
         await self._messages().insert_one(
             {
@@ -248,9 +250,9 @@ class ChatRepository:
         next_before = None
         if has_more and raw:
             last = raw[-1]
-            dt = last.get("last_activity") or last.get("created_at") or datetime.now(timezone.utc)
+            dt = last.get("last_activity") or last.get("created_at") or datetime.now(PKT)
             if not isinstance(dt, datetime):
-                dt = datetime.now(timezone.utc)
+                dt = datetime.now(PKT)
             next_before = self._cursor_key(dt, str(last.get("conversation_id") or ""))
         count_q = dict(base_q)
         if search:
@@ -263,7 +265,7 @@ class ChatRepository:
         await self.connect()
         updated = await self._sessions().find_one_and_update(
             {"conversation_id": conversation_id, "patient_id": patient_id},
-            {"$set": {"title": self._normalize_preview(title, 80), "last_activity": datetime.now(timezone.utc)}},
+            {"$set": {"title": self._normalize_preview(title, 80), "last_activity": datetime.now(PKT)}},
             return_document=ReturnDocument.AFTER,
         )
         return self._session_doc(updated) if updated else None
@@ -272,14 +274,14 @@ class ChatRepository:
         await self.connect()
         updated = await self._sessions().find_one_and_update(
             {"conversation_id": conversation_id, "patient_id": patient_id},
-            {"$set": {"archived": False, "archived_at": None, "last_activity": datetime.now(timezone.utc)}},
+            {"$set": {"archived": False, "archived_at": None, "last_activity": datetime.now(PKT)}},
             return_document=ReturnDocument.AFTER,
         )
         return self._session_doc(updated) if updated else None
 
     async def soft_delete_session(self, patient_id: str, conversation_id: str) -> int:
         await self.connect()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(PKT)
         r = await self._sessions().update_one(
             {
                 "conversation_id": conversation_id,
@@ -311,7 +313,7 @@ class ChatRepository:
     ) -> str:
         await self.connect()
         token = str(uuid.uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(PKT)
         from datetime import timedelta
 
         exp = now + timedelta(seconds=ttl_seconds)
@@ -342,7 +344,7 @@ class ChatRepository:
         self, action_token: str, status: str, extra: dict[str, Any] | None = None
     ) -> None:
         await self.connect()
-        u: dict[str, Any] = {"status": status, "updated_at": datetime.now(timezone.utc)}
+        u: dict[str, Any] = {"status": status, "updated_at": datetime.now(PKT)}
         if extra:
             u["result"] = extra
         await self._pending().update_one({"action_token": action_token}, {"$set": u})

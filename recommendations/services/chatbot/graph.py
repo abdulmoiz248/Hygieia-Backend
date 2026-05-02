@@ -98,11 +98,26 @@ def build_system_prompt() -> str:
     )
 
 
+_key_index = 0
+
 def get_llm() -> ChatGoogleGenerativeAI:
+    global _key_index
     model = os.getenv("CHATBOT_GEMINI_MODEL") or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    key = os.getenv("GEMINI_API_KEY", "")
+    
+    keys = []
+    for i in range(1, 20):
+        k = os.getenv(f"CHATBOT_GEMINI_KEY_{i}")
+        if k:
+            keys.append(k)
+            
+    if keys:
+        key = keys[_key_index % len(keys)]
+        _key_index = (_key_index + 1) % len(keys)
+    else:
+        key = os.getenv("GEMINI_API_KEY", "")
+        
     if not key:
-        raise RuntimeError("GEMINI_API_KEY is required for chatbot")
+        raise RuntimeError("GEMINI_API_KEY or CHATBOT_GEMINI_KEY_x is required for chatbot")
     return ChatGoogleGenerativeAI(google_api_key=key, model=model, temperature=0.1)
 
 

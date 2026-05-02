@@ -115,25 +115,29 @@ class ChatMessageIn(BaseModel):
 
 
 class ChatRequestBody(BaseModel):
-    patient_id: str = Field(..., description="Patient (user) UUID")
+    model_config = ConfigDict(populate_by_name=True)
+    patient_id: str = Field(..., alias="patientId", description="Patient (user) UUID")
     messages: List[ChatMessageIn] = Field(..., min_length=1)
-    conversation_id: str | None = None
-    confirm_action_token: str | None = None
+    conversation_id: str | None = Field(default=None, alias="conversationId")
+    confirm_action_token: str | None = Field(default=None, alias="confirmActionToken")
 
 
 class ChatConfirmBody(BaseModel):
-    patient_id: str
-    conversation_id: str
-    action_token: str
+    model_config = ConfigDict(populate_by_name=True)
+    patient_id: str = Field(..., alias="patientId")
+    conversation_id: str = Field(..., alias="conversationId")
+    action_token: str = Field(..., alias="actionToken")
 
 
 class ChatConversationRenameBody(BaseModel):
-    patient_id: str
+    model_config = ConfigDict(populate_by_name=True)
+    patient_id: str = Field(..., alias="patientId")
     title: str = Field(..., min_length=1, max_length=80)
 
 
 class ChatConversationUnarchiveBody(BaseModel):
-    patient_id: str
+    model_config = ConfigDict(populate_by_name=True)
+    patient_id: str = Field(..., alias="patientId")
 
 
 async def run_generation_job(trigger: str) -> None:

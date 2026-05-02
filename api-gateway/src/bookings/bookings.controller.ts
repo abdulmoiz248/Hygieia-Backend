@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common'
 import { FileInterceptor ,} from '@nestjs/platform-express'
 import { ClientProxy } from '@nestjs/microservices'
+import { firstValueFrom } from 'rxjs'
 @Controller('booked-lab-tests')
 export class BookingsController {
 
@@ -30,22 +31,22 @@ export class BookingsController {
       instructions?: string[]
     }
   ) {
-    return this.client.send({ cmd: 'book_test' }, body)
+    return await firstValueFrom(this.client.send({ cmd: 'book_test' }, body))
   }
 
   @Get('patient/:patientId')
   async getPatientBookings(@Param('patientId') patientId: string) {
-    return this.client.send({ cmd: 'get_patient_bookings' }, patientId)
+    return await firstValueFrom(this.client.send({ cmd: 'get_patient_bookings' }, patientId))
   }
 
   @Patch(':id/cancel')
   async cancelBooking(@Param('id') bookingId: string) {
-    return this.client.send({ cmd: 'cancel_booking' }, bookingId)
+    return await firstValueFrom(this.client.send({ cmd: 'cancel_booking' }, bookingId))
   }
 
   @Get('technician/:techId')
   async getTechnicianBookings(@Param('techId') techId: string) {
-    return this.client.send({ cmd: 'get_technician_bookings' }, techId)
+    return await firstValueFrom(this.client.send({ cmd: 'get_technician_bookings' }, techId))
   }
 
 @Post(':id/upload-scan')
@@ -58,7 +59,7 @@ async uploadScan(
   if (!file) throw new BadRequestException('File is required');
 
   // send file buffer or path to microservice
-return this.client.send(
+return await firstValueFrom(this.client.send(
   { cmd: 'upload_scan' },
   {
     bookingId,
@@ -66,7 +67,7 @@ return this.client.send(
     fileName: file.originalname,
     doctor_name,
   }
-);
+));
 
 
 }
@@ -82,9 +83,9 @@ return this.client.send(
       resultData: string
     }
   ) {
-    return this.client.send(
+    return await firstValueFrom(this.client.send(
       { cmd: 'upload_result' },
       { bookingId, ...body }
-    )
+    ))
   }
 }

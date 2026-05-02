@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Optional
 
 from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage
+import datetime
 
 APPT_TYPES = ("consultation", "follow-up", "emergency")
 APPT_MODES = ("physical", "online")
@@ -74,7 +76,15 @@ async def dispatch_read_tool(
         elif name == "read_my_appointments":
             d = await gateway.get_appointments_for_patient(patient_id)
         elif name == "read_active_prescriptions":
-            d = await gateway.get_active_prescriptions(patient_id)
+            all_prescriptions = await gateway.get_active_prescriptions(patient_id)
+            d = []
+            today = datetime.date.today().isoformat()
+            include_expired = args.get("include_expired", False)
+            if isinstance(all_prescriptions, list):
+                for p in all_prescriptions:
+                    end_date = p.get("endDate")
+                    if include_expired or not end_date or end_date >= today:
+                        d.append(p)
         elif name == "read_medication_logs":
             d = await gateway.get_medication_logs(
                 patient_id,
@@ -93,6 +103,27 @@ async def dispatch_read_tool(
             else:
                 rec = await get_recommendations(patient_id)
                 d = rec or {"message": "No stored recommendations for this patient yet."}
+        elif name == "read_patient_journal":
+            d = await gateway.get_patient_journal(patient_id, page=args.get("page", 1), limit=args.get("limit", 20))
+        elif name == "analyze_medical_record_content":
+            file_url = args.get("file_url")
+            question = args.get("question")
+            if not file_url:
+                d = {"error": "file_url is required"}
+            else:
+                # Convert PDF to JPG for Cloudinary to allow Gemini to read it as an image
+                image_url = file_url.replace(".pdf", ".jpg").replace(".PDF", ".jpg")
+                from services.chatbot.graph import get_llm
+                llm = get_llm()
+                msg = HumanMessage(content=[
+                    {"type": "text", "text": question},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ])
+                try:
+                    res = await llm.ainvoke([msg])
+                    d = {"answer": res.content}
+                except Exception as e:
+                    d = {"error": f"Failed to analyze image: {e}"}
         else:
             d = {"error": f"unknown read tool: {name}"}
         return _s(json.dumps(d, default=str), 24000)
@@ -111,13 +142,13 @@ async def dispatch_read_tool(
 
 @tool
 def read_list_doctors(specialization: str | None = None, name: str | None = None, hide_from_ui: bool = False) -> str:
-    """List registered doctors. Use specialization or name to filter and save tokens. Set hide_from_ui to true if you are just gathering info and don't want to display the full list to the user."""
+    """List registered doctors. Returns profiles including name, specialization, fee, rating, and working hours. Use this to find the "best" or highest rated doctor. Use specialization or name to filter and save tokens. Set hide_from_ui to true if you are just gathering info and don't want to display the full list to the user."""
     return "dispatch"
 
 
 @tool
 def read_list_nutritionists(specialization: str | None = None, name: str | None = None, hide_from_ui: bool = False) -> str:
-    """List registered nutritionists. Use specialization or name to filter and save tokens. Set hide_from_ui to true if you are just gathering info and don't want to display the full list to the user."""
+    """List registered nutritionists. Returns profiles including name, specialization, fee, rating, and working hours. Use this to find the "best" or highest rated nutritionist. Use specialization or name to filter and save tokens. Set hide_from_ui to true if you are just gathering info and don't want to display the full list to the user."""
     return "dispatch"
 
 
@@ -155,8 +186,8 @@ def read_my_appointments(hide_from_ui: bool = False) -> str:
 
 
 @tool
-def read_active_prescriptions() -> str:
-    """List this patient's active prescriptions and medications. Patient is inferred from the session."""
+def read_active_prescriptions(include_expired: bool = False) -> str:
+    """List this patient's prescriptions and medications. Set include_expired to true if the patient asks about past/expired prescriptions."""
     return "dispatch"
 
 
@@ -187,6 +218,17 @@ def read_my_lab_bookings() -> str:
 @tool
 def read_latest_recommendations() -> str:
     """Get the most recently generated care recommendations for this patient from the recommendation engine."""
+    return "dispatch"
+
+
+@tool
+def read_patient_journal(page: int = 1, limit: int = 20) -> str:
+    """List the patient's personal health journal entries (symptoms, mood, feelings). Patient is inferred from the session."""
+    return "dispatch"
+
+@tool
+def analyze_medical_record_content(file_url: str, question: str) -> str:
+    """Use AI to read and answer a question about the contents of a medical record (report, scan, image, pdf). Pass the 'file_url' of the record (from read_medical_records)."""
     return "dispatch"
 
 
@@ -227,7 +269,11 @@ def write_book_lab_test(
     location: str | None = None,
     instructions: str | None = None,
 ) -> str:
-    """Propose booking a lab test. scheduled_date YYYY-MM-DD, time as HH:MM. Does not execute until confirmed."""
+    """Propose booking a lab test. scheduled_date YYYY-MM-DD, time as HH:MM. 
+    IMPORTANT: You MUST ask the user if they want the test "in-house" or "in lab" before calling this tool. 
+    If "in lab", location should be one of "Hygieia Lab A", "Hygieia Lab B", or "Hygieia Lab C".
+    If "in-house", ask the user for their address and pass it as the location. 
+    Does not execute until confirmed."""
     return "dispatch"
 
 
@@ -260,6 +306,8 @@ ALL_READ_TOOLS: list = [
     read_fitness_summary,
     read_my_lab_bookings,
     read_latest_recommendations,
+    read_patient_journal,
+    analyze_medical_record_content,
 ]
 ALL_WRITE_TOOLS: list = [
     write_book_appointment,

@@ -110,8 +110,6 @@ class ChatbotService:
             raise PermissionError("Token subject does not match patientId")
 
     def _bind_llm(self) -> Any:
-        if self._llm_with_tools is not None:
-            return self._llm_with_tools
         self._llm = get_llm()
         self._llm_with_tools = self._llm.bind_tools(CHATBOT_TOOLS, tool_choice="auto")
         return self._llm_with_tools

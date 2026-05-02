@@ -134,6 +134,9 @@ class GatewayClient:
     async def get_booked_lab_tests_patient(self, patient_id: str) -> Any:
         return await self._request("GET", f"/booked-lab-tests/patient/{patient_id}")
 
+    async def get_patient_journal(self, patient_id: str, page: int = 1, limit: int = 20) -> Any:
+        return await self._request("GET", f"/patient-journal/entries/{patient_id}", params={"page": page, "limit": limit})
+
     # --- write endpoints ---
 
     async def post_appointment(self, body: dict[str, Any]) -> Any:

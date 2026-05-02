@@ -322,7 +322,24 @@ class ChatbotService:
             return await self.get_recs(pid)
 
         for _ in range(MAX_LOOP):
-            ai: AIMessage = await self._llm_with_tools.ainvoke(messages)
+            ai: AIMessage | None = None
+            for key_attempt in range(3):
+                try:
+                    ai = await self._llm_with_tools.ainvoke(messages)
+                    break
+                except Exception as e:
+                    err_str = str(e).lower()
+                    if "429" in err_str or "quota" in err_str or "exhausted" in err_str:
+                        if key_attempt == 2:
+                            raise e
+                        logger.warning(f"Quota exceeded, swapping API key inside loop... (Attempt {key_attempt+1})")
+                        self._bind_llm()
+                    else:
+                        raise e
+            
+            if not ai:
+                break
+
             tcl = self._tcalls_to_list(getattr(ai, "tool_calls", None) or None)
             if not tcl:
                 final = _normalize_text(getattr(ai, "content", None) or ai.content)  # type: ignore[union-attr]

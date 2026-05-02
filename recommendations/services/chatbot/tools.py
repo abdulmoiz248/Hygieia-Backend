@@ -22,6 +22,26 @@ def _s(v: str, max_l: int = 800) -> str:
     return t
 
 
+def _filter_providers(providers: Any, specialization: str | None, name: str | None) -> Any:
+    if not isinstance(providers, list):
+        return providers
+    res = providers
+    if specialization:
+        sp_lower = specialization.lower()
+        res = [p for p in res if isinstance(p, dict) and sp_lower in str(p.get("specialization") or "").lower()]
+    if name:
+        name_lower = name.lower()
+        res = [p for p in res if isinstance(p, dict) and name_lower in str(p.get("name") or "").lower()]
+    return res
+
+def _filter_lab_tests(tests: Any, name: str | None) -> Any:
+    if not isinstance(tests, list):
+        return tests
+    if name:
+        name_lower = name.lower()
+        return [t for t in tests if isinstance(t, dict) and name_lower in str(t.get("name") or "").lower()]
+    return tests
+
 # --- read tool implementations (called from dispatcher) ---
 
 async def dispatch_read_tool(
@@ -35,12 +55,16 @@ async def dispatch_read_tool(
     try:
         if name == "read_list_doctors":
             d = await gateway.get_doctors()
+            d = _filter_providers(d, args.get("specialization"), args.get("name"))
         elif name == "read_list_nutritionists":
             d = await gateway.get_nutritionists()
+            d = _filter_providers(d, args.get("specialization"), args.get("name"))
         elif name == "read_list_lab_technicians":
             d = await gateway.get_lab_technicians()
+            d = _filter_providers(d, None, args.get("name"))
         elif name == "read_list_lab_tests":
             d = await gateway.get_lab_tests()
+            d = _filter_lab_tests(d, args.get("name"))
         elif name == "read_available_slots":
             d = await gateway.get_available_slots(
                 str(args.get("provider_id", "")).strip(),
@@ -86,26 +110,26 @@ async def dispatch_read_tool(
 
 
 @tool
-def read_list_doctors() -> str:
-    """List all registered doctors. Use to help the patient find or compare doctors."""
+def read_list_doctors(specialization: str | None = None, name: str | None = None, hide_from_ui: bool = False) -> str:
+    """List registered doctors. Use specialization or name to filter and save tokens. Set hide_from_ui to true if you are just gathering info and don't want to display the full list to the user."""
     return "dispatch"
 
 
 @tool
-def read_list_nutritionists() -> str:
-    """List all registered nutritionists."""
+def read_list_nutritionists(specialization: str | None = None, name: str | None = None, hide_from_ui: bool = False) -> str:
+    """List registered nutritionists. Use specialization or name to filter and save tokens. Set hide_from_ui to true if you are just gathering info and don't want to display the full list to the user."""
     return "dispatch"
 
 
 @tool
-def read_list_lab_technicians() -> str:
-    """List lab technicians (pathologists) available in the system."""
+def read_list_lab_technicians(name: str | None = None, hide_from_ui: bool = False) -> str:
+    """List lab technicians (pathologists) available in the system. Use name to filter. Set hide_from_ui to true if you are just gathering info."""
     return "dispatch"
 
 
 @tool
-def read_list_lab_tests() -> str:
-    """List all lab tests / panels available to book in the system."""
+def read_list_lab_tests(name: str | None = None, hide_from_ui: bool = False) -> str:
+    """List all lab tests / panels available to book in the system. Use name to filter. Set hide_from_ui to true if you are just gathering info."""
     return "dispatch"
 
 
@@ -125,8 +149,8 @@ def read_available_slots(
 
 
 @tool
-def read_my_appointments() -> str:
-    """Load this patient's own appointments. Patient is inferred from the session — do not ask for the ID."""
+def read_my_appointments(hide_from_ui: bool = False) -> str:
+    """Load this patient's own appointments. Patient is inferred from the session — do not ask for the ID. Set hide_from_ui to true to read silently."""
     return "dispatch"
 
 

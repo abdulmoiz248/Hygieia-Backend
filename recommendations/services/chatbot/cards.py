@@ -154,8 +154,14 @@ def map_appointments(raw: Any) -> dict[str, Any]:
 
 def map_appointment_one(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
-        return {"type": APPOINTMENT_CARD, **_appt_from_row({})}
-    return {"type": APPOINTMENT_CARD, **_appt_from_row(raw)}
+        d = _appt_from_row({})
+        d["appt_type"] = d.pop("type", None)
+        d["type"] = APPOINTMENT_CARD
+        return d
+    d = _appt_from_row(raw)
+    d["appt_type"] = d.pop("type", None)
+    d["type"] = APPOINTMENT_CARD
+    return d
 
 
 def map_prescriptions(raw: Any) -> dict[str, Any]:

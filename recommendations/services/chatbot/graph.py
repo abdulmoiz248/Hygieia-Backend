@@ -13,7 +13,7 @@ import os
 from typing import Any
 
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ SINGLE_CLASSIFIER_PROMPT = (
 
 
 async def run_guardrails(
-    llm: ChatGroq,
+    llm: ChatGoogleGenerativeAI,
     user_text: str,
 ) -> tuple[bool, str | None]:
     """Return (is_out_of_scope, optional hint)."""
@@ -98,12 +98,12 @@ def build_system_prompt() -> str:
     )
 
 
-def get_llm() -> ChatGroq:
-    model = os.getenv("CHATBOT_GROQ_MODEL") or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-    key = os.getenv("GROQ_API_KEY", "")
+def get_llm() -> ChatGoogleGenerativeAI:
+    model = os.getenv("CHATBOT_GEMINI_MODEL") or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    key = os.getenv("GEMINI_API_KEY", "")
     if not key:
-        raise RuntimeError("GROQ_API_KEY is required for chatbot")
-    return ChatGroq(api_key=key, model=model, temperature=0.1)
+        raise RuntimeError("GEMINI_API_KEY is required for chatbot")
+    return ChatGoogleGenerativeAI(google_api_key=key, model=model, temperature=0.1)
 
 
 # --- minimal helpers for final reply when we skip second LLM ---

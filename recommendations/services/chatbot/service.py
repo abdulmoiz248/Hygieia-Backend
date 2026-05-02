@@ -131,7 +131,7 @@ class ChatbotService:
         t0: float,
         err: str | None = None,
     ) -> dict[str, Any]:
-        model = os.getenv("CHATBOT_GROQ_MODEL") or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        model = os.getenv("CHATBOT_GEMINI_MODEL") or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         m: dict[str, Any] = {
             "model": model,
             "latency_ms": int((time.time() - t0) * 1000),
@@ -228,9 +228,10 @@ class ChatbotService:
         prof = await self._build_profile(patient_id)
         n_turns = int(os.getenv("CHATBOT_MAX_TURNS", "12")) * 2 + 8
         hist = await self._repo.get_recent_messages(conv, n_turns)
-        lm: list[BaseMessage] = [SystemMessage(content=build_system_prompt())]
+        system_text = build_system_prompt()
         if prof:
-            lm.append(SystemMessage(content=f"Patient context: {prof}"))
+            system_text += f"\n\nPatient context: {prof}"
+        lm: list[BaseMessage] = [SystemMessage(content=system_text)]
         for d in hist:
             if (d.get("content") or "").strip():
                 lm.extend(_doc_to_base_messages(d))
@@ -431,7 +432,8 @@ class ChatbotService:
                     data = {"raw": t_str}
                 c = cards.card_for_read_tool(name, data)
                 if c and isinstance(c, dict):
-                    ui_acc.append(c)
+                    if not raw.get("hide_from_ui"):
+                        ui_acc.append(c)
                 w_id = str(tc.get("id", "x"))
                 messages.append(
                     ToolMessage(
@@ -645,7 +647,7 @@ class ChatbotService:
             "quick_replies": [],
             "pending_action": None,
             "meta": {
-                "model": os.getenv("CHATBOT_GROQ_MODEL", "llama-3.3-70b-versatile"),
+                "model": os.getenv("CHATBOT_GEMINI_MODEL", "gemini-2.5-flash"),
                 "latency_ms": int((time.time() - t0) * 1000),
             },
         }

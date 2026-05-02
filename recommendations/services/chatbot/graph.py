@@ -17,6 +17,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 logger = logging.getLogger(__name__)
+logging.getLogger("langchain_google_genai._function_utils").setLevel(logging.ERROR)
 
 
 SINGLE_CLASSIFIER_PROMPT = (
@@ -114,9 +115,11 @@ def get_llm() -> ChatGoogleGenerativeAI:
             
     if keys:
         key = keys[_key_index % len(keys)]
+        logger.info(f"Using CHATBOT_GEMINI_KEY_{( _key_index % len(keys) ) + 1} (masked: {key[:10]}...{key[-5:]})")
         _key_index = (_key_index + 1) % len(keys)
     else:
         key = os.getenv("GEMINI_API_KEY", "")
+        logger.info(f"Using fallback GEMINI_API_KEY (masked: {key[:10]}...{key[-5:]})")
         
     if not key:
         raise RuntimeError("GEMINI_API_KEY or CHATBOT_GEMINI_KEY_x is required for chatbot")

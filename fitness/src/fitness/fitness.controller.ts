@@ -20,5 +20,9 @@ export class FitnessController {
     return this.fitnessService.getTodayFitnessData(userId)
   }
 
-
+  @MessagePattern({ cmd: 'getYearlyFitnessStats' })
+  async getYearlyFitnessStats(@Payload() userId: string) {
+    this.logger.log('[INFO FITNESS CONTROLLER] Yearly stats request received')
+    return this.fitnessService.getYearlyFitnessStats(userId)
+  }
 }

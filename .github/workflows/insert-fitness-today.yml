@@ -129,4 +129,4 @@ jobs:
           });
           JS
 
-          node /tmp/insert_fitness_today.js
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/insert_fitness_today.js

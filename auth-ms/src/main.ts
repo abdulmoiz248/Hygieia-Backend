@@ -18,12 +18,12 @@ async function bootstrap() {
     transport: Transport.TCP,
     options: {
       host: '0.0.0.0',
-      port: 4002,
+      port: process.env.AUTH_MS_PORT ? parseInt(process.env.AUTH_MS_PORT) : 4002,
     },
   })
 
   // start both
   await app.startAllMicroservices()
-  await app.listen(4001)
+  await app.listen(process.env.GOOGLE_OAUTH_PORT ? parseInt(process.env.GOOGLE_OAUTH_PORT) : 4001, '0.0.0.0')
 }
 bootstrap()

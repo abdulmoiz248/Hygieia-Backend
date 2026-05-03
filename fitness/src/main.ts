@@ -7,7 +7,7 @@ async function bootstrap() {
     transport:Transport.TCP,
      options: {
        host: '0.0.0.0',
-       port: 4005
+       port: process.env.FITNESS_MS_PORT ? parseInt(process.env.FITNESS_MS_PORT) : 4005
      },
   });
   await app.listen();

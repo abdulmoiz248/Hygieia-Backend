@@ -8,10 +8,7 @@ RUN apk add --no-cache git python3 make g++
 COPY package*.json ./
 RUN npm config set fetch-retry-maxtimeout 600000 && npm config set fetch-retries 5 && npm ci --legacy-peer-deps
 
-# Ensure @nestjs/cli is available
-RUN npm list @nestjs/cli || npm install @nestjs/cli --legacy-peer-deps
-
-COPY tsconfig*.json ./
+COPY tsconfig*.json nest-cli.json ./
 COPY src ./src
 
 RUN npm run build
@@ -28,8 +25,8 @@ RUN npm config set fetch-retry-maxtimeout 600000 && npm config set fetch-retries
 # Copy compiled output from build stage
 COPY --from=build /app/dist ./dist
 
-ARG PORT=4000
-ENV PORT=$PORT
-EXPOSE $PORT
+ARG ADMIN_MS_PORT=4011
+ENV ADMIN_MS_PORT=$ADMIN_MS_PORT
+EXPOSE $ADMIN_MS_PORT
 
 CMD ["node", "dist/main.js"]

@@ -3,7 +3,7 @@
 # Hygieia Cron Jobs - Quick Testing Script
 # This script helps test the three cron jobs
 
-GATEWAY_URL="http://localhost:3000"
+GATEWAY_URL="http://localhost:4000"
 ENDPOINT="/admin/cron-test"
 
 echo "╔════════════════════════════════════════════════════════════╗"

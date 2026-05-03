@@ -11,7 +11,7 @@ import { ClientsModule ,Transport} from '@nestjs/microservices';
         transport: Transport.TCP,
         options: {
           host: process.env.AUTH_MS_HOST || 'localhost',
-          port: 4002,
+          port: process.env.AUTH_MS_PORT ? parseInt(process.env.AUTH_MS_PORT) : 4002,
         },
       },
       {

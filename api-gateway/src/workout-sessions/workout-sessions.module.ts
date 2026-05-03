@@ -10,7 +10,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
           transport: Transport.TCP,
           options: {
             host: process.env.FITNESS_HOST || 'localhost',
-            port: 4005,
+            port: process.env.FITNESS_MS_PORT ? parseInt(process.env.FITNESS_MS_PORT) : 4005,
           },
         },
       ]),

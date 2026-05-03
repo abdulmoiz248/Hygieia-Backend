@@ -20,9 +20,15 @@ services:
       - ./api-gateway/.env
     environment:
       - AUTH_MS_HOST=auth-ms
-      - LAB_HOST=lab
-      - APPOINTMENTS_HOST=appointments
-      - FITNESS_HOST=fitness
+      - AUTH_MS_PORT=4002
+      - LAB_MS_HOST=lab
+      - LAB_MS_PORT=4003
+      - APPOINTMENTS_MS_HOST=appointments
+      - APPOINTMENTS_MS_PORT=4006
+      - FITNESS_MS_HOST=fitness
+      - FITNESS_MS_PORT=4005
+      - ADMIN_MS_HOST=admin
+      - ADMIN_MS_PORT=4011
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=bullmq-redis
       - API_GATEWAY_HOST=api-gateway
@@ -33,6 +39,7 @@ services:
       - appointments
       - lab
       - fitness
+      - admin
       - scheduler
       - mailer
       - embeddings
@@ -49,6 +56,7 @@ services:
         PORT: 4002
     container_name: auth-ms
     ports:
+      - "4001:4001"
       - "4002:4002"
     env_file:
       - ./auth-ms/.env
@@ -61,17 +69,17 @@ services:
     networks:
       - hygieia-network
 
-  google-oauth:
+  admin:
     build:
-      context: ./auth-ms
+      context: ./admin
       dockerfile: Dockerfile
       args:
-        PORT: 4001
-    container_name: google-oauth
+        PORT: 4011
+    container_name: admin
     ports:
-      - "4001:4001"
+      - "4011:4011"
     env_file:
-      - ./auth-ms/.env
+      - ./admin/.env
     environment:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=bullmq-redis
@@ -80,6 +88,7 @@ services:
       - bullmq-redis
     networks:
       - hygieia-network
+
 
   lab:
     build:
@@ -142,27 +151,6 @@ services:
     networks:
       - hygieia-network
 
-  mcp:
-    build:
-      context: ./mcp
-      dockerfile: Dockerfile
-      args:
-        PORT: 4007
-    container_name: mcp
-    ports:
-      - "4007:4007"
-    env_file:
-      - ./mcp/.env
-    environment:
-      - API_GATEWAY_URL=http://api-gateway:4000
-      - RABBITMQ_HOST=rabbitmq
-      - REDIS_HOST=bullmq-redis
-    depends_on:
-      - api-gateway
-      - rabbitmq
-      - bullmq-redis
-    networks:
-      - hygieia-network
 
   embeddings:
     build:

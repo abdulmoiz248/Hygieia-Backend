@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apk add --no-cache git python3 make g++
 
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps
+RUN npm config set fetch-retry-maxtimeout 600000 && npm config set fetch-retries 5 && npm ci --legacy-peer-deps
 
 COPY tsconfig*.json ./
 COPY src ./src
@@ -20,7 +20,7 @@ WORKDIR /app
 
 # Copy package.json and install ALL dependencies (prod + dev) to avoid build failures
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps
+RUN npm config set fetch-retry-maxtimeout 600000 && npm config set fetch-retries 5 && npm ci --legacy-peer-deps
 
 # Copy compiled output from build stage
 COPY --from=build /app/dist ./dist

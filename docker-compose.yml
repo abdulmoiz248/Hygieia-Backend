@@ -22,10 +22,13 @@ services:
       - AUTH_MS_HOST=auth-ms
       - AUTH_MS_PORT=4002
       - LAB_MS_HOST=lab
+      - LAB_HOST=lab
       - LAB_MS_PORT=4003
       - APPOINTMENTS_MS_HOST=appointments
+      - APPOINTMENTS_HOST=appointments
       - APPOINTMENTS_MS_PORT=4006
       - FITNESS_MS_HOST=fitness
+      - FITNESS_HOST=fitness
       - FITNESS_MS_PORT=4005
       - ADMIN_MS_HOST=admin
       - ADMIN_MS_PORT=4011

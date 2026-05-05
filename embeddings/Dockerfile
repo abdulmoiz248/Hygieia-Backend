@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies (upgrade pip and retry to avoid transient network timeouts)
+RUN python -m pip install --upgrade pip setuptools wheel && \
+    /bin/sh -c 'for i in 1 2 3 4 5; do pip install --no-cache-dir -r requirements.txt && break || { echo "pip install failed, retrying ($i)..."; sleep 5; }; done'
 
 # Copy application code
 COPY . .

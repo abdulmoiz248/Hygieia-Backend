@@ -187,6 +187,7 @@ services:
       - ./recommendations/.env
     environment:
       - PORT=4012
+      - API_GATEWAY_URL=http://api-gateway:4000
     networks:
       - hygieia-network
 

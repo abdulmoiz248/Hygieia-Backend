@@ -47,6 +47,31 @@ export class AuthService {
     }
   }
 
+  private async sendPasswordResetConfirmationEmails(workEmail: string, personalEmail?: string | null) {
+    this.mailerClient.emit('send-password-reset-confirmation-email', { email: workEmail })
+
+    if (personalEmail && personalEmail !== workEmail) {
+      this.mailerClient.emit('send-password-reset-confirmation-email', { email: personalEmail })
+    }
+  }
+
+  private async createPasswordResetNotification(userId: string, email: string) {
+    const { error } = await this.supabase.getClient()
+      .from('notifications')
+      .insert([
+        {
+          user_id: userId,
+          notification_msg: 'Your password has been reset successfully.',
+          action: null,
+          title: 'Password Reset Successful',
+        },
+      ])
+
+    if (error) {
+      console.error(`[INFO: AUTH SERVICE] Failed to create password reset notification for ${email}: ${error.message}`)
+    }
+  }
+
   private async sendCredentialsEmail(personalEmail: string, workEmail: string, password: string, name: string, role: string) {
     console.log(`[INFO: AUTH SERVICE] Sending credentials email to ${personalEmail}`)
     this.mailerClient.emit('send-worker-credentials-email', { 
@@ -81,7 +106,7 @@ export class AuthService {
 
     const { data, error } = await this.supabase.getClient()
       .from('users')
-      .select('*')
+      .select('*, personal_email')
       .eq('email', email)
       .single()
 
@@ -670,6 +695,9 @@ export class AuthService {
       .from('users')
       .update({ password_hash: hash, otp: null })
       .eq('email', email)
+
+    await this.createPasswordResetNotification(data.id, email)
+    await this.sendPasswordResetConfirmationEmails(email, data?.personal_email)
 
     console.log(`[INFO: AUTH SERVICE] Password reset successful for ${email}`)
     return { message: 'Password reset successfully', success: true }

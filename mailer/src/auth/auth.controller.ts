@@ -24,6 +24,14 @@ export class AuthController {
   }
 
   /**
+   * Handle password reset confirmation email event
+   */
+  @MessagePattern('send-password-reset-confirmation-email')
+  async handlePasswordResetConfirmationEmail(@Payload() data: { email: string }) {
+    await this.authService.handlePasswordResetConfirmationEmail(data);
+  }
+
+  /**
    * Handle welcome email event
    */
   @MessagePattern('send-welcome-email')

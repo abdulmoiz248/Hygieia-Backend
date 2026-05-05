@@ -20,6 +20,7 @@ import { generateMedicineReminderEmail } from '../helpers/generateMedicineRemind
 import { generateNewsletterSubscriptionEmail } from '../helpers/generateNewsletterSubscriptionEmail'
 import { generateNutritionSummaryEmail } from '../helpers/generateNutritionSummaryEmail'
 import { generateOtpVerificationEmail } from '../helpers/generateOtpVerificationEmail'
+import { generatePasswordResetConfirmationEmail } from '../helpers/generatePasswordResetConfirmationEmail'
 import { generatePasswordResetOtpEmail } from '../helpers/generatePasswordResetOtpEmail'
 import { generateScanReportCompletionEmail } from '../helpers/generateScanReportCompletionEmail'
 import { generateWelcomeEmail } from '../helpers/generateWelcomeEmail'
@@ -187,6 +188,7 @@ const items: PreviewItem[] = [
   { category: 'Auth', title: 'Welcome email', description: 'New user onboarding template.', html: generateWelcomeEmail('jane.doe@example.com', 'Jane Doe') },
   { category: 'Auth', title: 'OTP verification', description: 'Email verification code.', html: generateOtpVerificationEmail('jane.doe@example.com', '482913') },
   { category: 'Auth', title: 'Password reset', description: 'Password reset OTP email.', html: generatePasswordResetOtpEmail('jane.doe@example.com', '725198') },
+  { category: 'Auth', title: 'Password reset success', description: 'Confirms a successful password reset.', html: generatePasswordResetConfirmationEmail('jane.doe@example.com') },
   { category: 'Auth', title: 'Newsletter signup', description: 'Subscription confirmation email.', html: generateNewsletterSubscriptionEmail('jane.doe@example.com') },
   { category: 'Careers', title: 'CV received', description: 'Acknowledges a submitted CV.', html: generateCvReceivedEmail() },
   { category: 'Careers', title: 'CV shortlisted', description: 'Positive application update.', html: generateCvShortlistedEmail('Jane Doe') },

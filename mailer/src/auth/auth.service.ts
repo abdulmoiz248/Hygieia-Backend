@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { generateOtpVerificationEmail } from 'src/helpers/generateOtpVerificationEmail';
+import { generatePasswordResetConfirmationEmail } from 'src/helpers/generatePasswordResetConfirmationEmail';
 import { generatePasswordResetOtpEmail } from 'src/helpers/generatePasswordResetOtpEmail';
 import { generateWelcomeEmail } from 'src/helpers/generateWelcomeEmail';
 import { generateWorkerCredentialsEmail } from 'src/helpers/generateWorkerCredentialsEmail';
@@ -31,6 +32,18 @@ export class AuthService {
       data.email,
       'Password Reset Request - Hygieia',
       generatePasswordResetOtpEmail(data.email, data.otp)
+    );
+  }
+
+  /**
+   * Send password reset confirmation email
+   */
+  async handlePasswordResetConfirmationEmail(data: { email: string }) {
+    console.log(`[MAILER SERVICE] Sending password reset confirmation email to ${data.email}`);
+    await this.mailService.sendMail(
+      data.email,
+      'Password Reset Successful - Hygieia',
+      generatePasswordResetConfirmationEmail(data.email)
     );
   }
 

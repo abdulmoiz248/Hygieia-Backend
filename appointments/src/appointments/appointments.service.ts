@@ -227,6 +227,30 @@ export class AppointmentsService {
     return doctor?.name || 'Doctor'
   }
 
+  private async resolveAppointmentProvider(providerId: string): Promise<{
+    providerRole: ProviderRole
+    provider: any
+    providerName: string
+  }> {
+    const providerRole = await this.resolveProviderRole(providerId)
+
+    if (providerRole === 'nutritionist') {
+      const provider = await this.nut.findOne({ id: providerId }).lean()
+      return {
+        providerRole,
+        provider,
+        providerName: provider?.name || 'Nutritionist',
+      }
+    }
+
+    const provider = await this.doctorProfileModel.findOne({ id: providerId }).lean()
+    return {
+      providerRole,
+      provider,
+      providerName: provider?.name || 'Doctor',
+    }
+  }
+
   private async sendReviewRequestAfterCompletion(params: {
     appointmentId: string
     patientId: string
@@ -421,7 +445,7 @@ export class AppointmentsService {
       try {
         // Fetch patient and doctor details for Zoom link generation
         const patient = await this.profileModel.findOne({ id: dto.patientId }).lean()
-        const doctor = await this.nut.findOne({ id: dto.doctorId }).lean()
+        const { provider, providerName } = await this.resolveAppointmentProvider(dto.doctorId)
         
         // Fetch patient and doctor emails from users table
         const { data: patientUser, error: patientUserError } = await this.supabase
@@ -436,13 +460,13 @@ export class AppointmentsService {
           .eq('id', dto.doctorId)
           .single()
         
-        if (patient && doctor && patientUser?.email && doctorUser?.email) {
+        if (patient && provider && patientUser?.email && doctorUser?.email) {
         
           const meetResult = await createZoomMeeting({
             patientEmail: patientUser.email,
             nutritionistEmail: doctorUser.email,
             patientName: patient.name || 'Patient',
-            nutritionistName: doctor.name || 'Doctor',
+            nutritionistName: providerName,
             appointmentDate: dto.date,
             appointmentTime: dto.time,
             appointmentId: appointmentData.id,
@@ -488,7 +512,7 @@ export class AppointmentsService {
     // Send confirmation email to patient
     try {
       const patient = await this.profileModel.findOne({ id: dto.patientId }).lean()
-      const doctor = await this.nut.findOne({ id: dto.doctorId }).lean()
+      const { provider, providerName } = await this.resolveAppointmentProvider(dto.doctorId)
       
       // Fetch patient email from users table
       const { data: userData, error: userError } = await this.supabase
@@ -497,7 +521,7 @@ export class AppointmentsService {
         .eq('id', dto.patientId)
         .single()
       
-      if (patient && doctor && userData?.email) {
+      if (patient && provider && userData?.email) {
 
 
 
@@ -508,7 +532,7 @@ export class AppointmentsService {
           doctor_id: dto.doctorId,
           patient_email: userData.email,
           patient_name: patient.name || 'Patient',
-          doctor_name: doctor.name || 'Doctor',
+          doctor_name: providerName,
           appointment_date: dto.date,
           appointment_time: dto.time,
           appointment_mode: dto.mode,
@@ -523,7 +547,7 @@ export class AppointmentsService {
           doctor_id: dto.doctorId,
           patient_email: userData.email,
           patient_name: patient.name || 'Patient',
-          doctor_name: doctor.name || 'Doctor',
+          doctor_name: providerName,
           appointment_date: dto.date,
           appointment_time: dto.time,
           appointment_mode: dto.mode,

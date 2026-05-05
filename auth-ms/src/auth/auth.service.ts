@@ -39,6 +39,14 @@ export class AuthService {
     this.mailerClient.emit(event, { email, otp })
   }
 
+  private async sendPasswordResetOtpEmails(workEmail: string, otp: string, personalEmail?: string | null) {
+    await this.sendOtpEmail(workEmail, otp, true)
+
+    if (personalEmail && personalEmail !== workEmail) {
+      await this.sendOtpEmail(personalEmail, otp, true)
+    }
+  }
+
   private async sendCredentialsEmail(personalEmail: string, workEmail: string, password: string, name: string, role: string) {
     console.log(`[INFO: AUTH SERVICE] Sending credentials email to ${personalEmail}`)
     this.mailerClient.emit('send-worker-credentials-email', { 
@@ -561,9 +569,9 @@ export class AuthService {
       throw new BadRequestException('Invalid email format')
     }
 
-    const { data: existingUser, error: fetchError } = await this.supabase.getClient()
+    const { data: existingUser } = await this.supabase.getClient()
       .from('users')
-      .select('id')
+      .select('id, personal_email')
       .eq('email', email)
       .single()
 
@@ -587,7 +595,7 @@ export class AuthService {
       throw new BadRequestException('Failed to process password reset request. Please try again')
     }
 
-    await this.sendOtpEmail(email, otp, true)
+    await this.sendPasswordResetOtpEmails(email, otp, existingUser?.personal_email)
     return { message: 'Password reset OTP sent to your email', success: true }
   }
 
@@ -600,7 +608,7 @@ export class AuthService {
 
     const { data: existingUser } = await this.supabase.getClient()
       .from('users')
-      .select('id')
+      .select('id, personal_email')
       .eq('email', email)
       .single()
 
@@ -623,7 +631,7 @@ export class AuthService {
 
     console.log(`[INFO: AUTH SERVICE] OTP updated for password reset resend for ${email} otp: ${otp}`)
 
-    await this.sendOtpEmail(email, otp, true)
+    await this.sendPasswordResetOtpEmails(email, otp, existingUser?.personal_email)
     return { message: 'Password reset OTP resent to your email', success: true }
   }
 

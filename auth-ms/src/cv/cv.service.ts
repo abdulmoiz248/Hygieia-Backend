@@ -169,7 +169,7 @@ export class CvService {
       // Update embeddings if new CV file was uploaded
       if (cvLink) {
         try {
-          const embeddingsServiceUrl = this.configService.get<string>('EMBEDDINGS_SERVICE_URL') || 'http://embeddings:4008'
+          const embeddingsServiceUrl = this.configService.get<string>('EMBEDDINGS_SERVICE_URL') || 'http://localhost:4008'
           console.log('[CV MS] updating embeddings for CV:', id)
           
           await axios.post(`${embeddingsServiceUrl}/cv/generate-embeddings`, {
@@ -267,7 +267,7 @@ export class CvService {
       
       // Delete embeddings from embeddings service
       try {
-        const embeddingsServiceUrl = this.configService.get<string>('EMBEDDINGS_SERVICE_URL') || 'http://embeddings:4008'
+        const embeddingsServiceUrl = this.configService.get<string>('EMBEDDINGS_SERVICE_URL') || 'http://localhost:4008'
         await axios.delete(`${embeddingsServiceUrl}/cv/embeddings/${id}`, {
           timeout: 5000
         })

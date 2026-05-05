@@ -66,6 +66,7 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - REDIS_HOST=bullmq-redis
+      - EMBEDDINGS_SERVICE_URL=http://embeddings:4008
     depends_on:
       - rabbitmq
       - bullmq-redis

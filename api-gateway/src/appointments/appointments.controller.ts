@@ -462,4 +462,77 @@ async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────
+  //  FOLLOW-UP APPOINTMENT REQUESTS
+  // ─────────────────────────────────────────────────────────────
+
+  @Post('follow-up/request')
+  @ApiOperation({
+    summary: 'Provider requests follow-up',
+    description: 'A doctor or nutritionist requests a follow-up appointment with a patient.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['patientId', 'providerId', 'providerRole'],
+      properties: {
+        patientId: { type: 'string', format: 'uuid' },
+        providerId: { type: 'string', format: 'uuid' },
+        providerRole: { type: 'string', enum: ['doctor', 'nutritionist'] },
+        reason: { type: 'string', example: 'Review blood test results' },
+        suggestedDate: { type: 'string', format: 'date', example: '2026-06-01' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Follow-up requested successfully' })
+  async requestFollowUp(@Body() body: any) {
+    try {
+      return await firstValueFrom(this.client.send({ cmd: 'request_follow_up' }, body))
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Failed to request follow-up')
+    }
+  }
+
+  @Get('follow-up/patient/:patientId')
+  @ApiOperation({
+    summary: 'Get follow-up requests for a patient',
+    description: 'Returns pending follow-up requests for a patient.',
+  })
+  @ApiParam({ name: 'patientId', description: 'Patient ID (UUID)' })
+  @ApiResponse({ status: 200, description: 'Requests fetched successfully' })
+  async getFollowUpRequests(@Param('patientId', new ParseUUIDPipe()) patientId: string) {
+    try {
+      return await firstValueFrom(this.client.send({ cmd: 'get_follow_up_requests' }, patientId))
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Failed to fetch follow-up requests')
+    }
+  }
+
+  @Patch('follow-up/:requestId/dismiss')
+  @ApiOperation({
+    summary: 'Dismiss a follow-up request',
+    description: 'Patient dismisses a follow-up request.',
+  })
+  @ApiParam({ name: 'requestId', description: 'Request ID (UUID)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['patientId'],
+      properties: { patientId: { type: 'string', format: 'uuid' } },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Request dismissed' })
+  async dismissFollowUpRequest(
+    @Param('requestId', new ParseUUIDPipe()) requestId: string,
+    @Body() body: { patientId: string },
+  ) {
+    try {
+      return await firstValueFrom(
+        this.client.send({ cmd: 'dismiss_follow_up_request' }, { requestId, patientId: body.patientId }),
+      )
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Failed to dismiss request')
+    }
+  }
+
 }

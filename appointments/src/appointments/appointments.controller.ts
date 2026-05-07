@@ -170,9 +170,19 @@ getAvailableSlots(@Payload() payload:AvailableSlotsQueryDto) {
     return this.svc.getReferredTestsForPatient(patientId)
   }
 
-  @MessagePattern({ cmd: 'dismiss_referred_test' })
-  dismissReferredTest(@Payload() payload: { referralId: string; patientId: string }) {
-    return this.svc.dismissReferredTest(payload.referralId, payload.patientId)
+  @MessagePattern({ cmd: 'request_follow_up' })
+  requestFollowUp(@Payload() dto: { patientId: string; providerId: string; providerRole: 'doctor' | 'nutritionist'; reason?: string; suggestedDate?: string }) {
+    return this.svc.requestFollowUp(dto)
+  }
+
+  @MessagePattern({ cmd: 'get_follow_up_requests' })
+  getFollowUpRequests(@Payload() patientId: string) {
+    return this.svc.getFollowUpRequestsForPatient(patientId)
+  }
+
+  @MessagePattern({ cmd: 'dismiss_follow_up_request' })
+  dismissFollowUpRequest(@Payload() payload: { requestId: string; patientId: string }) {
+    return this.svc.dismissFollowUpRequest(payload.requestId, payload.patientId)
   }
 
 }

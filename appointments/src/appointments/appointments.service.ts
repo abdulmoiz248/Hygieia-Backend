@@ -2665,6 +2665,111 @@ async getAvailableSlots(providerId: string, role: string, date: string) {
     return { success: true, message: 'Referred test dismissed successfully' }
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  //  FOLLOW-UP APPOINTMENT REQUESTS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Provider requests a follow-up appointment with a patient.
+   */
+  async requestFollowUp(dto: {
+    patientId: string
+    providerId: string
+    providerRole: 'doctor' | 'nutritionist'
+    reason?: string
+    suggestedDate?: string
+  }) {
+    this.logger(`FOLLOW-UP REQUEST BY PROVIDER=${dto.providerId} FOR PATIENT=${dto.patientId}`)
+
+    const { data: request, error } = await this.supabase
+      .from('follow_up_requests')
+      .insert({
+        patient_id: dto.patientId,
+        provider_id: dto.providerId,
+        provider_role: dto.providerRole,
+        reason: dto.reason || null,
+        suggested_date: dto.suggestedDate || null,
+      })
+      .select('id')
+      .single()
+
+    if (error) throw new BadRequestException('Failed to create follow-up request: ' + error.message)
+
+    // Fire-and-forget notification to patient
+    this.resolveProviderName(dto.providerId, dto.providerRole).then((providerName) => {
+      const roleLabel = dto.providerRole === 'nutritionist' ? 'Nutritionist' : 'Dr.'
+      const notificationMsg = `${roleLabel} ${providerName} has requested a follow-up appointment with you.`
+      
+      this.supabase.from('notifications').insert({
+        user_id: dto.patientId,
+        title: '📅 Follow-up Requested',
+        notification_msg: notificationMsg,
+      }).then(({ error: notifErr }) => {
+        if (notifErr) this.logger(`FAILED TO SEND FOLLOW-UP NOTIFICATION: ${notifErr.message}`)
+        else this.logger(`SENT FOLLOW-UP NOTIFICATION TO PATIENT=${dto.patientId}`)
+      })
+    })
+
+    return {
+      success: true,
+      message: 'Follow-up request sent to patient',
+      requestId: request.id,
+    }
+  }
+
+  /**
+   * Patient gets their pending follow-up requests.
+   */
+  async getFollowUpRequestsForPatient(patientId: string) {
+    this.logger(`GET FOLLOW-UP REQUESTS FOR PATIENT=${patientId}`)
+
+    const { data: requests, error } = await this.supabase
+      .from('follow_up_requests')
+      .select('id, provider_id, provider_role, reason, suggested_date, status, created_at')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+
+    if (error) throw new BadRequestException('Failed to fetch follow-up requests: ' + error.message)
+    if (!requests || requests.length === 0) return []
+
+    // Enhance with provider names
+    const providerPromises = requests.map(async (req) => {
+      const name = await this.resolveProviderName(req.provider_id, req.provider_role as 'doctor' | 'nutritionist')
+      return {
+        ...req,
+        provider: { id: req.provider_id, name, role: req.provider_role },
+      }
+    })
+
+    return await Promise.all(providerPromises)
+  }
+
+  /**
+   * Patient dismisses a follow-up request.
+   */
+  async dismissFollowUpRequest(requestId: string, patientId: string) {
+    this.logger(`DISMISS FOLLOW-UP REQUEST=${requestId} BY PATIENT=${patientId}`)
+
+    const { data: request, error: fetchErr } = await this.supabase
+      .from('follow_up_requests')
+      .select('id, patient_id, status')
+      .eq('id', requestId)
+      .single()
+
+    if (fetchErr || !request) throw new BadRequestException('Follow-up request not found')
+    if (request.patient_id !== patientId) throw new ForbiddenException('Not authorized')
+    if (request.status !== 'pending') throw new BadRequestException(`Request is already ${request.status}`)
+
+    const { error: updateErr } = await this.supabase
+      .from('follow_up_requests')
+      .update({ status: 'dismissed' })
+      .eq('id', requestId)
+
+    if (updateErr) throw new BadRequestException('Failed to dismiss: ' + updateErr.message)
+
+    return { success: true, message: 'Follow-up request dismissed' }
+  }
+
   logger(msg:string){
    console.log("[INFO APPOINTMENT SERVICE] "+msg)
   }

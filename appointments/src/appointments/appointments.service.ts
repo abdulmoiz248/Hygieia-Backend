@@ -1063,6 +1063,10 @@ async completeNutritionistAppointment(
     }))
     this.logger("NUTRITIONIST REFERRED TOTAL " + inserts.length + " TEST(s)")
     tasks.push(this.supabase.from('referred_tests').insert(inserts).then(r => r) as any)
+
+    // Send in-app notification to patient about referred tests
+    this.sendReferredTestNotifications(appt.patient_id, dto.referredTestIds, nutritionistId, 'nutritionist')
+      .catch(err => this.logger(`FAILED TO SEND REFERRAL NOTIFICATIONS: ${err?.message}`))
   }
 
   if (dto.dietPlan) {
@@ -1168,6 +1172,10 @@ async completeDoctorAppointment(
     }))
     this.logger('DOCTOR REFERRED TOTAL ' + inserts.length + ' TEST(s)')
     tasks.push(this.supabase.from('referred_tests').insert(inserts).then(r => r) as any)
+
+    // Send in-app notification to patient about referred tests
+    this.sendReferredTestNotifications(appt.patient_id, dto.referredTestIds, doctorId, 'doctor')
+      .catch(err => this.logger(`FAILED TO SEND REFERRAL NOTIFICATIONS: ${err?.message}`))
   }
 
   if (dto.prescription?.medications?.length) {
@@ -2515,6 +2523,146 @@ async getAvailableSlots(providerId: string, role: string, date: string) {
       message: 'Report submitted successfully. We will investigate this matter.',
       reportId: report.id,
     }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  REFERRED TESTS — Notifications + Patient Endpoints
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Fire-and-forget: create in-app notifications for each referred test.
+   */
+  private async sendReferredTestNotifications(
+    patientId: string,
+    testIds: string[],
+    referrerId: string,
+    referrerRole: 'doctor' | 'nutritionist',
+  ) {
+    // Resolve referrer name
+    const referrerName = await this.resolveProviderName(referrerId, referrerRole)
+    const roleLabel = referrerRole === 'nutritionist' ? 'Nutritionist' : 'Dr.'
+
+    // Fetch test names in bulk
+    const { data: tests } = await this.supabase
+      .from('lab_tests')
+      .select('id, name')
+      .in('id', testIds)
+
+    const testMap = new Map((tests || []).map(t => [t.id, t.name]))
+
+    // Create one notification per referred test
+    const notifications = testIds.map(testId => ({
+      user_id: patientId,
+      title: '🔬 Lab Test Referred',
+      notification_msg: `${roleLabel} ${referrerName} has referred you for "${testMap.get(testId) || 'a lab test'}". You can book this test in the app.`,
+      action: null,
+    }))
+
+    const { error } = await this.supabase.from('notifications').insert(notifications)
+    if (error) {
+      this.logger(`FAILED TO INSERT REFERRAL NOTIFICATIONS: ${error.message}`)
+    } else {
+      this.logger(`SENT ${notifications.length} REFERRAL NOTIFICATION(s) TO PATIENT=${patientId}`)
+    }
+  }
+
+  /**
+   * Get all referred tests for a patient, joined with lab test details.
+   */
+  async getReferredTestsForPatient(patientId: string) {
+    this.logger(`GET REFERRED TESTS FOR PATIENT=${patientId}`)
+
+    const { data: referrals, error } = await this.supabase
+      .from('referred_tests')
+      .select('id, test_id, referrer_id, dismissed, created_at')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+
+    if (error) throw new BadRequestException('Failed to fetch referred tests: ' + error.message)
+    if (!referrals || referrals.length === 0) return []
+
+    // Fetch lab test details for all referred test IDs
+    const testIds = [...new Set(referrals.map(r => r.test_id))]
+    const referrerIds = [...new Set(referrals.map(r => r.referrer_id))]
+
+    const [testsRes, referrersRes] = await Promise.all([
+      this.supabase
+        .from('lab_tests')
+        .select('id, name, description, category, price, duration, preparation_instructions, record_type')
+        .in('id', testIds),
+      this.supabase
+        .from('users')
+        .select('id, role')
+        .in('id', referrerIds),
+    ])
+
+    const testMap = new Map((testsRes.data || []).map(t => [t.id, t]))
+    const referrerRoles = new Map((referrersRes.data || []).map(r => [r.id, r.role as ProviderRole]))
+
+    // Resolve referrer names in parallel
+    const namePromises = referrerIds.map(async rid => {
+      const role = referrerRoles.get(rid) || 'doctor'
+      const name = await this.resolveProviderName(rid, role)
+      return { id: rid, name, role }
+    })
+    const referrerInfos = await Promise.all(namePromises)
+    const referrerMap = new Map(referrerInfos.map(r => [r.id, r]))
+
+    // Check which tests are already booked by matching test_id + patient_id in booked_lab_tests
+    const { data: bookedTests } = await this.supabase
+      .from('booked_lab_tests')
+      .select('test_id, status')
+      .eq('patient_id', patientId)
+      .in('test_id', testIds)
+
+    const bookedMap = new Map((bookedTests || []).map(b => [b.test_id, b.status]))
+
+    return referrals.map(r => {
+      const test = testMap.get(r.test_id)
+      const referrer = referrerMap.get(r.referrer_id)
+      const bookedStatus = bookedMap.get(r.test_id)
+
+      let status: string = 'pending'
+      if (r.dismissed) status = 'dismissed'
+      else if (bookedStatus) status = bookedStatus // 'pending', 'completed', etc.
+
+      return {
+        id: r.id,
+        testId: r.test_id,
+        test: test || null,
+        referrer: referrer ? { name: referrer.name, role: referrer.role } : null,
+        status,
+        dismissed: r.dismissed,
+        createdAt: r.created_at,
+      }
+    })
+  }
+
+  /**
+   * Dismiss a referred test (patient chose not to book).
+   */
+  async dismissReferredTest(referralId: string, patientId: string) {
+    this.logger(`DISMISS REFERRED TEST=${referralId} BY PATIENT=${patientId}`)
+
+    // Verify ownership
+    const { data: referral, error: fetchErr } = await this.supabase
+      .from('referred_tests')
+      .select('id, patient_id, dismissed')
+      .eq('id', referralId)
+      .single()
+
+    if (fetchErr || !referral) throw new BadRequestException('Referred test not found')
+    if (referral.patient_id !== patientId) throw new ForbiddenException('Not authorized')
+    if (referral.dismissed) throw new BadRequestException('Already dismissed')
+
+    const { error: updateErr } = await this.supabase
+      .from('referred_tests')
+      .update({ dismissed: true })
+      .eq('id', referralId)
+
+    if (updateErr) throw new BadRequestException('Failed to dismiss: ' + updateErr.message)
+
+    return { success: true, message: 'Referred test dismissed successfully' }
   }
 
   logger(msg:string){

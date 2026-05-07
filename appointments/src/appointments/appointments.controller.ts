@@ -165,4 +165,14 @@ getAvailableSlots(@Payload() payload:AvailableSlotsQueryDto) {
     return this.svc.reportProvider(dto)
   }
 
+  @MessagePattern({ cmd: 'get_referred_tests' })
+  getReferredTests(@Payload() patientId: string) {
+    return this.svc.getReferredTestsForPatient(patientId)
+  }
+
+  @MessagePattern({ cmd: 'dismiss_referred_test' })
+  dismissReferredTest(@Payload() payload: { referralId: string; patientId: string }) {
+    return this.svc.dismissReferredTest(payload.referralId, payload.patientId)
+  }
+
 }

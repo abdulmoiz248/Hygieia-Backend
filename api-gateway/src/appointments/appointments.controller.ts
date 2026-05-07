@@ -376,7 +376,90 @@ async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
     return this.client.send({ cmd: 'get_previous_appointments' }, { nutritionistId, patientId })
   }
 
+  // ─────────────────────────────────────────────────────────────
+  //  REFERRED LAB TESTS (Patient Endpoints)
+  // ─────────────────────────────────────────────────────────────
 
+  @Get('referred-tests/patient/:patientId')
+  @ApiOperation({
+    summary: 'Get referred lab tests for a patient',
+    description:
+      'Returns all lab tests referred to a patient by their doctors or nutritionists. Includes test details, referrer info, and booking status (pending / booked / completed / dismissed).',
+  })
+  @ApiParam({ name: 'patientId', description: 'Patient user ID (UUID)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Referred tests fetched successfully',
+    schema: {
+      example: [
+        {
+          id: 'referral-uuid',
+          testId: 'test-uuid',
+          test: {
+            id: 'test-uuid',
+            name: 'Complete Blood Count (CBC)',
+            description: 'Measures blood components...',
+            category: 'Hematology',
+            price: 1500,
+            duration: '24-48 hours',
+            preparation_instructions: ['Fast for 8-12 hours'],
+            record_type: 'lab',
+          },
+          referrer: { name: 'Dr. Ahmad', role: 'doctor' },
+          status: 'pending',
+          dismissed: false,
+          createdAt: '2026-05-07T10:30:00Z',
+        },
+      ],
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid patient ID' })
+  async getReferredTests(@Param('patientId', new ParseUUIDPipe()) patientId: string) {
+    try {
+      return await firstValueFrom(
+        this.client.send({ cmd: 'get_referred_tests' }, patientId),
+      )
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Failed to fetch referred tests')
+    }
+  }
 
+  @Patch('referred-tests/:referralId/dismiss')
+  @ApiOperation({
+    summary: 'Dismiss a referred lab test',
+    description:
+      'Patient dismisses a referred lab test they do not wish to book. Sets dismissed = true.',
+  })
+  @ApiParam({ name: 'referralId', description: 'Referral ID (UUID)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['patientId'],
+      properties: {
+        patientId: { type: 'string', format: 'uuid', description: 'Patient user ID' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Referred test dismissed successfully',
+    schema: {
+      example: { success: true, message: 'Referred test dismissed successfully' },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Referral not found or already dismissed' })
+  @ApiResponse({ status: 403, description: 'Patient is not the owner of this referral' })
+  async dismissReferredTest(
+    @Param('referralId', new ParseUUIDPipe()) referralId: string,
+    @Body() body: { patientId: string },
+  ) {
+    try {
+      return await firstValueFrom(
+        this.client.send({ cmd: 'dismiss_referred_test' }, { referralId, patientId: body.patientId }),
+      )
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Failed to dismiss referred test')
+    }
+  }
 
 }

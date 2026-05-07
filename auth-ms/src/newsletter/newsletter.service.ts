@@ -24,4 +24,22 @@ export class NewsletterService {
     if (error) throw new BadRequestException(error.message);
     return data;
   }
+
+  async unsubscribe(email: string) {
+    if (!email?.trim()) throw new BadRequestException('Email is required');
+
+    const { data, error } = await this.supabase
+      .from('newsletter')
+      .delete()
+      .eq('email', email.trim().toLowerCase())
+      .select();
+
+    if (error) throw new BadRequestException(error.message);
+    if (!data || data.length === 0) {
+      throw new BadRequestException('Email not found in newsletter subscribers');
+    }
+
+    console.log(`[INFO NEWSLETTER MS] Unsubscribed email: ${email}`);
+    return { success: true, message: 'Successfully unsubscribed from newsletter' };
+  }
 }

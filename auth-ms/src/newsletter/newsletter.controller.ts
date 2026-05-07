@@ -20,4 +20,13 @@ export class NewsletterController {
   async getAll() {
     return await this.newsletterService.findAll();
   }
+
+  @MessagePattern({ cmd: 'unsubscribe-newsletter' })
+  unsubscribe(@Body() dto: { email: string }) {
+    console.log(
+      '[INFO NEWSLETTER MS] Received newsletter unsubscribe request for email:',
+      dto.email,
+    );
+    return this.newsletterService.unsubscribe(dto.email);
+  }
 }

@@ -1,17 +1,17 @@
-import { 
-  Controller, 
-  Inject, 
-  Post, 
+import {
+  Controller,
+  Inject,
+  Post,
   Get,
   Query,
-  Body, 
+  Body,
   UnauthorizedException,
   BadRequestException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices/client/client-proxy';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { SubscribeNewsletterDto } from './dto/subscribeNewsletter.dto';
 import { GenerateNewsletterHtmlDto } from './dto/generate-newsletter-html.dto';
 import { SendNewsletterDto } from './dto/send-newsletter.dto';
@@ -25,15 +25,15 @@ export class NewsletterController {
   constructor(
     @Inject('AUTH_SERVICE') private authClient: ClientProxy,
     @Inject('ADMIN_SERVICE') private adminClient: ClientProxy,
-  ) {}
+  ) { }
 
   @Post('subscribe-newsletter')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Subscribe to newsletter',
     description: 'Subscribe user email to the newsletter mailing list.'
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Successfully subscribed to newsletter',
     schema: {
       example: {
@@ -43,8 +43,8 @@ export class NewsletterController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 400, 
+  @ApiResponse({
+    status: 400,
     description: 'Bad request - email already subscribed or validation error',
     schema: {
       example: {
@@ -64,6 +64,46 @@ export class NewsletterController {
       );
     } catch (e: any) {
       throw new BadRequestException(e?.message || 'Newsletter subscription failed');
+    }
+  }
+
+  @Post('unsubscribe-newsletter')
+  @ApiOperation({
+    summary: 'Unsubscribe from newsletter',
+    description: 'Remove an email from the newsletter mailing list. Pass the email address in the request body.'
+  })
+  @ApiBody({ type: SubscribeNewsletterDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully unsubscribed from newsletter',
+    schema: {
+      example: {
+        success: true,
+        message: 'Successfully unsubscribed from newsletter'
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Email not found or validation error',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Email not found in newsletter subscribers',
+        success: false
+      }
+    }
+  })
+  async unsubscribe(@Body() dto: SubscribeNewsletterDto) {
+    try {
+      return await firstValueFrom(
+        this.authClient.send(
+          { cmd: 'unsubscribe-newsletter' },
+          dto
+        )
+      );
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Newsletter unsubscribe failed');
     }
   }
 
@@ -198,12 +238,12 @@ export class NewsletterController {
   }
 
   @Post('generate-newsletter-html')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Generate newsletter HTML (Admin only)',
     description: 'Generate responsive HTML newsletter content using AI based on provided idea. Requires admin role.'
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Newsletter HTML generated successfully',
     schema: {
       example: {
@@ -216,8 +256,8 @@ export class NewsletterController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 401, 
+  @ApiResponse({
+    status: 401,
     description: 'Unauthorized - user is not an admin',
     schema: {
       example: {
@@ -227,8 +267,8 @@ export class NewsletterController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 400, 
+  @ApiResponse({
+    status: 400,
     description: 'Bad request - validation error or generation failed',
     schema: {
       example: {
@@ -259,12 +299,12 @@ export class NewsletterController {
   }
 
   @Post('send-newsletter')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Send newsletter to all subscribers (Admin only)',
     description: 'Send newsletter HTML to all subscribed users. Requires admin role.'
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Newsletter sent successfully',
     schema: {
       example: {
@@ -281,8 +321,8 @@ export class NewsletterController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 401, 
+  @ApiResponse({
+    status: 401,
     description: 'Unauthorized - user is not an admin',
     schema: {
       example: {
@@ -292,8 +332,8 @@ export class NewsletterController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 400, 
+  @ApiResponse({
+    status: 400,
     description: 'Bad request - validation error or send failed',
     schema: {
       example: {
@@ -324,12 +364,12 @@ export class NewsletterController {
   }
 
   @Post('send-blogpost-newsletter')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Send blog post as newsletter (Admin only)',
     description: 'Converts a blog post to newsletter format using AI and sends to all subscribers. Requires admin role.'
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Blog post newsletter sent successfully',
     schema: {
       example: {
@@ -351,8 +391,8 @@ export class NewsletterController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 401, 
+  @ApiResponse({
+    status: 401,
     description: 'Unauthorized - user is not an admin',
     schema: {
       example: {
@@ -362,8 +402,8 @@ export class NewsletterController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 400, 
+  @ApiResponse({
+    status: 400,
     description: 'Bad request - blogpost not found or send failed',
     schema: {
       example: {

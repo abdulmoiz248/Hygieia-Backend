@@ -8,6 +8,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
 import { BlogpostModule } from './blogpost/blogpost.module';
 import { AnnouncementModule } from './announcement/announcement.module';
 import { WorkerReportModule } from './worker-report/worker-report.module';
+import { ProviderReportModule } from './provider-report/provider-report.module';
 
 @Module({
   imports: [
@@ -18,8 +19,10 @@ import { WorkerReportModule } from './worker-report/worker-report.module';
     BlogpostModule,
     AnnouncementModule,
     WorkerReportModule,
+    ProviderReportModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+

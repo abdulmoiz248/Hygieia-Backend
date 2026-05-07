@@ -12,6 +12,8 @@ import { MedicationLogsQueryDto } from './dto/medication-logs-query.dto'
 import { CompleteDoctorAppointmentDto } from './dto/complete-doctor-appointment.dto'
 import { SubmitAppointmentReviewDto } from './dto/submit-appointment-review.dto'
 import { GetProviderReviewsDto } from './dto/get-provider-reviews.dto'
+import { ReportProviderDto } from './dto/report-provider.dto'
+
 
 @Controller()
 export class AppointmentsController {
@@ -158,5 +160,9 @@ getAvailableSlots(@Payload() payload:AvailableSlotsQueryDto) {
     return this.svc.getMedicationLogs(payload)
   }
 
+  @MessagePattern({ cmd: 'report_provider' })
+  reportProvider(@Payload() dto: ReportProviderDto) {
+    return this.svc.reportProvider(dto)
+  }
 
 }

@@ -9,6 +9,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
 import { CvModule } from './cv/cv.module';
 import { AuthModule } from './auth/auth.module';
 import { NutritionAndAdherenceMailerModule } from './nutrition-and-adherence/nutrition-and-adherence.module';
+import { ReportModule } from './report/report.module';
 
 @Module({
   imports: [  ConfigModule.forRoot({ isGlobal: true }),
@@ -18,8 +19,10 @@ import { NutritionAndAdherenceMailerModule } from './nutrition-and-adherence/nut
     NewsletterModule,
     CvModule,
     AuthModule,
-    NutritionAndAdherenceMailerModule],
+    NutritionAndAdherenceMailerModule,
+    ReportModule],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+

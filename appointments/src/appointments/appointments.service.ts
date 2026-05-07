@@ -23,6 +23,10 @@ import { MedicationTakenDto } from './dto/medication-taken.dto'
 import { MedicationLogsQueryDto } from './dto/medication-logs-query.dto'
 import { SubmitAppointmentReviewDto } from './dto/submit-appointment-review.dto'
 import { GetProviderReviewsDto } from './dto/get-provider-reviews.dto'
+import { ReportProviderDto } from './dto/report-provider.dto'
+import { v2 as cloudinary } from 'cloudinary'
+import { ConfigService } from '@nestjs/config'
+import { Readable } from 'stream'
 
 type DbRow = {
   id: string
@@ -153,8 +157,14 @@ export class AppointmentsService {
     @Inject('SCHEDULER_SERVICE') private readonly schedulerClient: ClientProxy,
     @Inject('MAILER_SERVICE') private readonly mailerClient: ClientProxy,
     private readonly mailerService: MailerService,
-
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    cloudinary.config({
+      cloud_name: this.configService.get<string>('CLOUDINARY_CLOUD_NAME'),
+      api_key: this.configService.get<string>('CLOUDINARY_API_KEY'),
+      api_secret: this.configService.get<string>('CLOUDINARY_API_SECRET'),
+    })
+  }
 
   private toApi(r: DbRow): ApiRow {
     return {
@@ -2380,6 +2390,132 @@ async getAvailableSlots(providerId: string, role: string, date: string) {
 
 
 
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  REPORT PROVIDER (Doctor / Nutritionist)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Upload a single base64 image to Cloudinary.
+   * Returns the secure_url on success.
+   */
+  private async uploadBase64ToCloudinary(base64: string, index: number): Promise<string> {
+    // Strip data-URI prefix if present
+    const raw = base64.replace(/^data:image\/\w+;base64,/, '')
+    const buffer = Buffer.from(raw, 'base64')
+
+    return new Promise<string>((resolve, reject) => {
+      const publicId = `report_${Date.now()}_${index}`
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'provider_reports',
+          resource_type: 'image',
+          public_id: publicId,
+        },
+        (error, result) => {
+          if (error) {
+            this.logger(`Cloudinary upload failed for image ${index}: ${error.message}`)
+            reject(error)
+          } else {
+            this.logger(`Cloudinary upload success for image ${index}: ${result?.secure_url}`)
+            resolve(result!.secure_url)
+          }
+        },
+      )
+      const readable = new Readable()
+      readable.push(buffer)
+      readable.push(null)
+      readable.pipe(stream)
+    })
+  }
+
+  async reportProvider(dto: ReportProviderDto) {
+    this.logger(`REPORT PROVIDER called by patient=${dto.patientId} against provider=${dto.reportedProviderId}`)
+
+    // 1. Verify the caller is a patient
+    const { data: caller, error: callerErr } = await this.supabase
+      .from('users')
+      .select('id, email, role')
+      .eq('id', dto.patientId)
+      .single()
+
+    if (callerErr || !caller) {
+      throw new BadRequestException('Patient not found')
+    }
+    if (caller.role !== 'patient') {
+      throw new ForbiddenException('Only patients can report a provider')
+    }
+
+    // 2. Verify the provider exists with correct role
+    const { data: provider, error: providerErr } = await this.supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', dto.reportedProviderId)
+      .single()
+
+    if (providerErr || !provider) {
+      throw new BadRequestException('Provider not found')
+    }
+    if (provider.role !== dto.reportedProviderRole) {
+      throw new BadRequestException(
+        `Provider role mismatch: expected ${dto.reportedProviderRole}, found ${provider.role}`,
+      )
+    }
+
+    // 3. Upload images to Cloudinary (if provided, max 3)
+    let evidenceUrls: string[] = []
+    if (dto.images && dto.images.length > 0) {
+      if (dto.images.length > 3) {
+        throw new BadRequestException('Maximum 3 images allowed as evidence')
+      }
+      this.logger(`Uploading ${dto.images.length} evidence images to Cloudinary`)
+      evidenceUrls = await Promise.all(
+        dto.images.map((img, i) => this.uploadBase64ToCloudinary(img, i)),
+      )
+      this.logger(`All evidence images uploaded successfully`)
+    }
+
+    // 4. Insert report into Supabase
+    const { data: report, error: insertErr } = await this.supabase
+      .from('provider_reports')
+      .insert({
+        patient_id: dto.patientId,
+        reported_provider_id: dto.reportedProviderId,
+        reported_provider_role: dto.reportedProviderRole,
+        reason: dto.reason,
+        description: dto.description || null,
+        evidence_urls: evidenceUrls,
+        status: 'pending',
+        warning_issued: false,
+      })
+      .select()
+      .single()
+
+    if (insertErr) {
+      this.logger(`Failed to insert provider report: ${insertErr.message}`)
+      throw new BadRequestException('Failed to submit report: ' + insertErr.message)
+    }
+
+    this.logger(`Provider report created with id=${report.id}`)
+
+    // 5. Get patient name for the email
+    const patient = await this.profileModel.findOne({ id: dto.patientId }).lean()
+
+    // 6. Emit event to mailer service for patient acknowledgement email
+    this.mailerClient.emit('provider_report_submitted', {
+      patient_email: caller.email,
+      patient_name: patient?.name || 'Patient',
+      reported_provider_role: dto.reportedProviderRole,
+      report_id: report.id,
+    })
+    this.logger(`Emitted provider_report_submitted event for patient=${caller.email}`)
+
+    return {
+      success: true,
+      message: 'Report submitted successfully. We will investigate this matter.',
+      reportId: report.id,
+    }
+  }
 
   logger(msg:string){
    console.log("[INFO APPOINTMENT SERVICE] "+msg)

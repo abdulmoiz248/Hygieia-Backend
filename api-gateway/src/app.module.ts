@@ -26,6 +26,7 @@ import { AnnouncementModule } from './announcement/announcement.module';
 import { WorkerReportModule } from './worker-report/worker-report.module';
 import { LabTechniciansModule } from './lab-technicians/lab-technicians.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { ProviderReportModule } from './provider-report/provider-report.module';
 
 @Module({
   imports: [
@@ -57,8 +58,10 @@ import { RecommendationsModule } from './recommendations/recommendations.module'
     WorkerReportModule,
     LabTechniciansModule,
     RecommendationsModule,
+    ProviderReportModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+

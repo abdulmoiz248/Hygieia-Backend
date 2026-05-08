@@ -31,28 +31,67 @@ export class NewsletterService {
     const model = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash';
     const client = new GoogleGenAI({ apiKey });
 
-    const prompt = `Generate a production-ready responsive HTML email newsletter.
-Return ONLY raw HTML (no markdown, no code fences, no explanation).
+    const prompt = `You are an elite email designer specializing in modern, premium health-tech newsletters.
+Generate a production-ready responsive HTML email newsletter.
+Return ONLY raw HTML — no markdown fences, no commentary, no explanation. Start with <!DOCTYPE html>.
 
-Newsletter idea:
+Newsletter idea / topic:
 ${idea}
 
-Design requirements:
-- Must be email-client friendly and responsive for mobile using table-based layout and inline CSS.
-- Must include viewport meta and semantic email sections (header, hero, body, CTA, footer).
-- Keep width centered, max width around 600px.
-- Use these colors only:
-  - #008396 (soft blue)
-  - #46bba5 (mint green)
-  - #ff1c6c (soft coral)
-  - #fbf9ea (snow white)
-  - #001016 (dark slate gray)
-  - #17433b (cool gray)
-- Ensure good text contrast and accessible font sizing.
-- Include a clear CTA button.
-- Include a footer note suitable for newsletters. note today's date is ${new Date().toLocaleDateString()} and our website is hygieia-frontend.vercel.app with blogs at /blogs.
-- no images section 
-- our website is hygieia-frontend.vercel.app and /blogs for blogs pages
+BRAND IDENTITY — Hygieia (modern digital health platform):
+- Brand voice: Trustworthy, clean, forward-thinking, warm.
+- Logo text: "HYGIEIA" in bold uppercase, letter-spacing: 3px.
+
+COLOR PALETTE (use these exclusively):
+- Primary Teal:    #008396  — hero backgrounds, headings, primary buttons
+- Mint Accent:     #46bba5  — secondary accents, subtle highlights, gradient partner
+- Coral Pop:       #ff1c6c  — small accent pops only (tags, badges, tiny highlights)
+- Off-White:       #fbf9ea  — main body background
+- Deep Slate:      #001016  — body text, footer background
+- Forest Green:    #17433b  — subheadings, secondary text
+
+DESIGN SYSTEM (modern 2025+ email aesthetics):
+1. LAYOUT:
+   - Table-based layout for email-client compatibility, all CSS inline.
+   - Single-column, centered, max-width 600px, with 24px horizontal padding.
+   - Use MSO conditionals for Outlook compatibility.
+2. HERO SECTION:
+   - Full-width gradient background: linear-gradient(135deg, #008396, #46bba5).
+   - For email fallback, use background-color: #008396.
+   - Large white headline (28–32px, bold, line-height 1.3) with a short subtitle (16px, rgba white 85%).
+   - Generous vertical padding (48px top/bottom).
+3. TYPOGRAPHY:
+   - Font stack: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif.
+   - Body text: #001016, 16px, line-height 1.7 for readability.
+   - Headings: #008396 or #17433b, bold, with clear size hierarchy (h1: 28px, h2: 22px, h3: 18px).
+   - Use generous letter-spacing on section labels (1.5px, uppercase, 12px, #46bba5).
+4. CONTENT BLOCKS:
+   - Wrap key content sections in rounded-corner card-style containers (background: #ffffff, border-radius: 12px, padding: 28px 24px, border: 1px solid #e8e8e8).
+   - Use subtle top-border accents on cards (3px solid #46bba5) for visual interest.
+   - Add 20px vertical spacing between cards.
+5. DIVIDERS:
+   - Use thin (1px) gradient-look dividers: border-top: 2px solid #46bba5 with 50% width, centered, margin 32px auto.
+6. CTA BUTTON:
+   - Pill-shaped (border-radius: 50px), background: #008396, color: #ffffff.
+   - Padding: 16px 40px, font-size: 16px, font-weight: 600, no underline.
+   - Centered in its own table cell. Add a subtle box-shadow effect if possible.
+   - On hover-capable clients, slightly darker background.
+   - Link to: https://hygieia-frontend.vercel.app/blogs
+7. FOOTER:
+   - Background: #001016, color: rgba(255,255,255,0.7), padding: 32px 24px.
+   - Include: © ${new Date().getFullYear()} Hygieia. All rights reserved.
+   - Small links: Website (https://hygieia-frontend.vercel.app) | Blogs (https://hygieia-frontend.vercel.app/blogs)
+   - "You received this because you subscribed to the Hygieia newsletter."
+   - Include an unsubscribe placeholder link.
+   - Today's date: ${new Date().toLocaleDateString()}
+8. HEADER / NAV BAR:
+   - Clean top bar with white/off-white background, "HYGIEIA" logo text on the left in #008396 (bold, 22px, letter-spacing: 3px).
+   - Optional subtle bottom-border: 2px solid #46bba5.
+9. NO IMAGES — rely entirely on typography, color, spacing, and layout for visual impact.
+10. WHITESPACE: Be generous. Use at least 24px padding in content areas, 16px between paragraphs. Let the design breathe.
+11. MOBILE RESPONSIVE: Include a <style> block with @media queries for max-width:600px to stack content and adjust font sizes.
+
+CRITICAL: Make this look like a premium 2025 health-tech newsletter — clean, spacious, modern. NOT a generic corporate email from 2015.
 `;
 
     try {
@@ -206,37 +245,83 @@ Design requirements:
     const model = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash';
     const client = new GoogleGenAI({ apiKey });
 
-    const prompt = `Convert this blog post into a production-ready responsive HTML email newsletter.
-Return ONLY raw HTML (no markdown, no code fences, no explanation).
+    const prompt = `You are an elite email designer specializing in modern, premium health-tech newsletters.
+Convert this blog post into a stunning, production-ready responsive HTML email newsletter.
+Return ONLY raw HTML — no markdown fences, no commentary, no explanation. Start with <!DOCTYPE html>.
 
-Blog Post Details:
+BLOG POST DETAILS:
 Title: ${blogpost.title}
 Author: ${blogpost.author || 'Hygieia Team'}
 Excerpt: ${blogpost.excerpt || ''}
 Category: ${blogpost.category || ''}
 Tags: ${blogpost.tags?.join(', ') || ''}
 Read Time: ${blogpost.readTime || ''} minutes
-Content (in markdown):
+Content (markdown — convert to beautiful HTML):
 ${blogpost.content}
 
-Design requirements:
-- Must be email-client friendly and responsive for mobile using table-based layout and inline CSS.
-- Must include viewport meta and semantic email sections (header, hero, body, CTA, footer).
-- Keep width centered, max width around 600px.
-- Use these colors only:
-  - #008396 (soft blue)
-  - #46bba5 (mint green)
-  - #ff1c6c (soft coral)
-  - #fbf9ea (snow white)
-  - #001016 (dark slate gray)
-  - #17433b (cool gray)
-- Ensure good text contrast and accessible font sizing.
-- Convert the markdown content properly to HTML with proper formatting.
-- Include the blog title as a prominent heading.
-- Show author, category, tags, and read time in metadata section.
-- Include a clear CTA button that links to the full blog post at: https://hygieia-frontend.vercel.app/blogs/${blogpostId}
-- Include a footer note. Today's date is ${new Date().toLocaleDateString()} and our website is hygieia-frontend.vercel.app with blogs at /blogs.
-- Make it visually appealing and professional.
+BRAND IDENTITY — Hygieia (modern digital health platform):
+- Brand voice: Trustworthy, clean, forward-thinking, warm.
+- Logo text: "HYGIEIA" in bold uppercase, letter-spacing: 3px.
+
+COLOR PALETTE (use these exclusively):
+- Primary Teal:    #008396  — hero backgrounds, headings, primary buttons
+- Mint Accent:     #46bba5  — secondary accents, subtle highlights, gradient partner
+- Coral Pop:       #ff1c6c  — small accent pops only (category badge, tags)
+- Off-White:       #fbf9ea  — main body background
+- Deep Slate:      #001016  — body text, footer background
+- Forest Green:    #17433b  — subheadings, secondary text, author name
+
+DESIGN SYSTEM (modern 2025+ email aesthetics):
+1. LAYOUT:
+   - Table-based layout for email-client compatibility, all CSS inline.
+   - Single-column, centered, max-width 600px, with 24px horizontal padding.
+   - Use MSO conditionals for Outlook compatibility.
+2. HERO SECTION:
+   - Full-width gradient background: linear-gradient(135deg, #008396, #46bba5).
+   - For email fallback, use background-color: #008396.
+   - Blog title as large white headline (28–32px, bold, line-height 1.3).
+   - Blog excerpt as subtitle below (16px, rgba white 85%).
+   - Generous vertical padding (48px top/bottom).
+3. METADATA BAR (below hero):
+   - Clean horizontal layout showing: Author (with a small "By" prefix in #17433b), Category (as a small pill badge with background #ff1c6c, white text, border-radius 20px, font-size 11px, uppercase), Read Time (with a clock emoji or "📖"), and Date.
+   - Use 14px font, color #17433b, padding 16px 24px, background #ffffff.
+   - Separate items with subtle "·" dot dividers.
+4. TYPOGRAPHY:
+   - Font stack: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif.
+   - Body text: #001016, 16px, line-height 1.7 for readability.
+   - Headings: #008396 or #17433b, bold, clear hierarchy (h2: 22px, h3: 18px).
+   - Use generous letter-spacing on section labels (1.5px, uppercase, 12px, #46bba5).
+5. CONTENT AREA:
+   - Render the blog markdown as well-formatted HTML inside a white card container.
+   - Card style: background #ffffff, border-radius: 12px, padding: 32px 28px, border: 1px solid #e8e8e8.
+   - Add subtle top-border accent on the card (3px solid #46bba5).
+   - Properly format: paragraphs, headings, bold, italic, lists (with #46bba5 bullet color), blockquotes (left-border: 4px solid #46bba5, background: #f0faf8, padding: 16px).
+   - Code blocks if any: background #f5f5f5, border-radius 8px, padding 16px, font-family monospace.
+6. TAGS SECTION:
+   - Display tags as small pill badges below the content (background: #e8f7f5, color: #17433b, border-radius: 20px, padding: 4px 14px, font-size: 12px, display: inline-block, margin: 4px).
+7. CTA BUTTON:
+   - Text: "Read Full Article" or "Continue Reading"
+   - Pill-shaped (border-radius: 50px), background: #008396, color: #ffffff.
+   - Padding: 16px 40px, font-size: 16px, font-weight: 600, no underline.
+   - Centered in its own table cell.
+   - Link to: https://hygieia-frontend.vercel.app/blogs/${blogpostId}
+8. DIVIDERS:
+   - Thin (1px) dividers: border-top: 2px solid #46bba5, 50% width, centered, margin 32px auto.
+9. HEADER / NAV BAR:
+   - Clean top bar with white/off-white background, "HYGIEIA" logo text on the left in #008396 (bold, 22px, letter-spacing: 3px).
+   - Subtle bottom-border: 2px solid #46bba5.
+10. FOOTER:
+    - Background: #001016, color: rgba(255,255,255,0.7), padding: 32px 24px.
+    - Include: © ${new Date().getFullYear()} Hygieia. All rights reserved.
+    - Small links: Website (https://hygieia-frontend.vercel.app) | Blogs (https://hygieia-frontend.vercel.app/blogs)
+    - "You received this because you subscribed to the Hygieia newsletter."
+    - Include an unsubscribe placeholder link.
+    - Today's date: ${new Date().toLocaleDateString()}
+11. NO IMAGES — rely entirely on typography, color, spacing, and layout for visual impact.
+12. WHITESPACE: Be generous. Use at least 24px padding in content areas, 16px between paragraphs. Let the design breathe.
+13. MOBILE RESPONSIVE: Include a <style> block with @media queries for max-width:600px to adjust font sizes and padding.
+
+CRITICAL: This must look like a premium 2025 health-tech newsletter — clean, spacious, elegant. NOT a generic corporate email from 2015.
 `;
 
     let html: string;

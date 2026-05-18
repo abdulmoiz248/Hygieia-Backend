@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiBody } from '@nestjs/swagger';
 import { FeedbackFormService } from './feedback-form.service';
 import { CreateFeedbackFormDto } from './dto/create-feedback-form.dto';
@@ -33,6 +33,21 @@ export class FeedbackFormController {
   @ApiBody({ type: AdminActionDto })
   getFormResults(@Param('id') formId: string, @Body() dto: AdminActionDto) {
     return this.feedbackFormService.getFormResults(formId, dto.userId);
+  }
+
+  @Get('reviews')
+  @ApiOperation({
+    summary: 'Get all public Hygieia reviews (Public)',
+    description: 'Returns paginated hygieia_review entries from submitted feedback forms. No authentication required.',
+  })
+  getPublicReviews(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.feedbackFormService.getPublicReviews(
+      limit ? parseInt(limit, 10) : undefined,
+      offset ? parseInt(offset, 10) : undefined,
+    );
   }
 
   @Get(':id')

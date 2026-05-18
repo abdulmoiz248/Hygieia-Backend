@@ -64,4 +64,15 @@ export class FeedbackFormService {
       throw new InternalServerErrorException(error.message || 'Failed to fetch form results');
     }
   }
+
+  async getPublicReviews(limit?: number, offset?: number) {
+    try {
+      return await firstValueFrom(
+        this.adminClient.send({ cmd: 'get_public_reviews' }, { limit, offset }),
+      );
+    } catch (error) {
+      this.logger.error(`Error fetching public reviews: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(error.message || 'Failed to fetch reviews');
+    }
+  }
 }

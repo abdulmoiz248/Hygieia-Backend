@@ -177,4 +177,25 @@ export class FeedbackFormService {
 
     return data;
   }
+
+  async getPublicReviews(limit = 20, offset = 0) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const safeOffset = Math.max(Number(offset) || 0, 0);
+
+    this.logger.log(`Fetching public Hygieia reviews limit=${safeLimit} offset=${safeOffset}`);
+
+    const { data, error, count } = await this.supabaseService
+      .getClient()
+      .from('feedback_responses')
+      .select('id, hygieia_review, user_email, created_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(safeOffset, safeOffset + safeLimit - 1);
+
+    if (error) {
+      this.logger.error(`Failed to fetch public reviews: ${error.message}`);
+      throw new InternalServerErrorException('Failed to fetch reviews');
+    }
+
+    return { items: data || [], total: count || 0, limit: safeLimit, offset: safeOffset };
+  }
 }

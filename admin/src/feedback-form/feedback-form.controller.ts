@@ -46,4 +46,10 @@ export class FeedbackFormController {
     const data = await this.feedbackFormService.getFormResults(payload.formId, payload.userId);
     return { data };
   }
+
+  @MessagePattern({ cmd: 'get_public_reviews' })
+  async getPublicReviews(payload: { limit?: number; offset?: number }) {
+    const data = await this.feedbackFormService.getPublicReviews(payload.limit, payload.offset);
+    return { data };
+  }
 }

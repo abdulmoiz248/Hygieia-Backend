@@ -10,6 +10,7 @@ import { CvModule } from './cv/cv.module';
 import { AuthModule } from './auth/auth.module';
 import { NutritionAndAdherenceMailerModule } from './nutrition-and-adherence/nutrition-and-adherence.module';
 import { ReportModule } from './report/report.module';
+import { FeedbackMailerModule } from './feedback/feedback.module';
 
 @Module({
   imports: [  ConfigModule.forRoot({ isGlobal: true }),
@@ -20,7 +21,9 @@ import { ReportModule } from './report/report.module';
     CvModule,
     AuthModule,
     NutritionAndAdherenceMailerModule,
-    ReportModule],
+    ReportModule,
+    FeedbackMailerModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

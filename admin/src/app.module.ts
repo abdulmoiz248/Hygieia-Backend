@@ -9,6 +9,7 @@ import { BlogpostModule } from './blogpost/blogpost.module';
 import { AnnouncementModule } from './announcement/announcement.module';
 import { WorkerReportModule } from './worker-report/worker-report.module';
 import { ProviderReportModule } from './provider-report/provider-report.module';
+import { FeedbackFormModule } from './feedback-form/feedback-form.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ProviderReportModule } from './provider-report/provider-report.module';
     AnnouncementModule,
     WorkerReportModule,
     ProviderReportModule,
+    FeedbackFormModule,
   ],
   controllers: [AppController],
   providers: [AppService],

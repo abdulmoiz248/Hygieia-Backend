@@ -1,4 +1,4 @@
-import { COLORS, HYGIEIA_LOGO, emailHeaderStyles, getFooter, getHeaderWithLogo } from './utils'
+import { COLORS, emailHeaderStyles, getFooter, getHeaderWithLogo } from './utils'
 
 export interface FeedbackFormEmailData {
   formId: string
@@ -33,63 +33,57 @@ export function generateFeedbackFormEmail(data: FeedbackFormEmailData): string {
           font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           color: ${COLORS.dark};
         }
-        .btn {
-          display: inline-block;
-          background: linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary});
-          color: #ffffff !important;
-          padding: 14px 38px;
-          border-radius: 30px;
-          text-decoration: none;
-          font-weight: 600;
-          letter-spacing: 0.4px;
-          margin-top: 20px;
-        }
         @media (max-width:480px){
           .content { padding: 20px !important; }
-          h2 { font-size: 18px !important; }
         }
       </style>
     </head>
     <body>
       <table width="100%" bgcolor="${COLORS.background}" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td align="center" valign="top" style="padding: 30px 10px;">
-            <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff; border-radius:20px; box-shadow:0 4px 20px rgba(0,0,0,0.08); overflow:hidden; text-align:center;">
+          <td align="center" valign="top" style="padding:30px 10px;">
+            <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;border-radius:20px;box-shadow:0 4px 20px rgba(0,0,0,0.08);overflow:hidden;">
 
               <!-- Header -->
               <tr>
-                <td style="${emailHeaderStyles}">
+                <td align="center" style="${emailHeaderStyles}">
                   ${getHeaderWithLogo()}
                 </td>
               </tr>
 
               <!-- Icon -->
               <tr>
-                <td style="padding: 35px 30px 10px;">
-                  <div style="width:80px;height:80px;background:linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary});border-radius:50%;display:flex;align-items:center;justify-content:center;margin:auto;box-shadow:0 6px 20px rgba(0,131,150,0.25);">
-                    <span style="font-size:38px;">📋</span>
-                  </div>
+                <td align="center" style="padding:35px 30px 10px;">
+                  <table cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" valign="middle" width="80" height="80"
+                        style="width:80px;height:80px;background:linear-gradient(135deg,${COLORS.primary},${COLORS.secondary});border-radius:50%;box-shadow:0 6px 20px rgba(0,131,150,0.25);">
+                        <span style="font-size:36px;line-height:80px;">&#x1F4CB;</span>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
 
-              <!-- Title -->
+              <!-- Title block -->
               <tr>
-                <td style="padding: 15px 40px 5px;" class="content">
-                  <h2 style="font-size:22px;color:${COLORS.gray};margin:0 0 5px;">We'd love your feedback!</h2>
-                  <p style="color:${COLORS.textMuted};font-size:14px;margin:0 0 20px;">Your opinion helps us improve Hygieia for everyone</p>
+                <td align="center" style="padding:15px 40px 5px;" class="content">
+                  <h2 style="font-size:22px;font-weight:700;color:${COLORS.gray};margin:0 0 6px;">We'd love your feedback!</h2>
+                  <p style="font-size:14px;color:${COLORS.textMuted};margin:0 0 20px;">Your opinion helps us improve Hygieia for everyone</p>
                 </td>
               </tr>
 
               <!-- Form info card -->
               <tr>
-                <td style="padding: 0 40px 20px;" class="content">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${COLORS.background};border-radius:16px;border-left:4px solid ${COLORS.secondary};padding:24px;text-align:left;">
+                <td style="padding:0 40px 20px;" class="content">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                    style="background-color:${COLORS.background};border-radius:16px;border-left:4px solid ${COLORS.secondary};">
                     <tr>
-                      <td>
+                      <td style="padding:20px 24px;">
                         <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${COLORS.primary};">${data.title}</p>
-                        ${data.description ? `<p style="font-size:15px;line-height:1.7;color:${COLORS.textDark};margin:0 0 16px;">${data.description}</p>` : ''}
+                        ${data.description ? `<p style="font-size:15px;line-height:1.7;color:${COLORS.textDark};margin:0 0 12px;">${data.description}</p>` : ''}
                         <p style="font-size:13px;color:${COLORS.textMuted};margin:0;">
-                          ⏰ &nbsp;This form expires on <strong style="color:${COLORS.accent};">${expiryFormatted}</strong>
+                          &#x23F0;&nbsp; This form expires on <strong style="color:${COLORS.accent};">${expiryFormatted}</strong>
                         </p>
                       </td>
                     </tr>
@@ -99,34 +93,31 @@ export function generateFeedbackFormEmail(data: FeedbackFormEmailData): string {
 
               <!-- How it works -->
               <tr>
-                <td style="padding: 0 40px 20px;" class="content">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0fdf4;border-radius:16px;padding:24px;text-align:left;">
+                <td style="padding:0 40px 20px;" class="content">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                    style="background-color:#f0fdf4;border-radius:16px;">
                     <tr>
-                      <td>
-                        <p style="margin:0 0 12px;font-weight:700;color:${COLORS.gray};font-size:15px;">How it works</p>
+                      <td style="padding:20px 24px;">
+                        <p style="margin:0 0 14px;font-weight:700;color:${COLORS.gray};font-size:15px;">How it works</p>
                         <table cellpadding="0" cellspacing="0" border="0" width="100%">
                           <tr>
-                            <td style="padding:6px 0;font-size:14px;color:${COLORS.textDark};">
-                              <span style="color:${COLORS.secondary};font-weight:bold;margin-right:8px;">1.</span>
-                              Click the button below to open the form
+                            <td style="padding:5px 0;font-size:14px;color:${COLORS.textDark};">
+                              <span style="color:${COLORS.secondary};font-weight:bold;margin-right:8px;">1.</span>Click the button below to open the form
                             </td>
                           </tr>
                           <tr>
-                            <td style="padding:6px 0;font-size:14px;color:${COLORS.textDark};">
-                              <span style="color:${COLORS.secondary};font-weight:bold;margin-right:8px;">2.</span>
-                              Enter your email address to get started
+                            <td style="padding:5px 0;font-size:14px;color:${COLORS.textDark};">
+                              <span style="color:${COLORS.secondary};font-weight:bold;margin-right:8px;">2.</span>Enter your email address to get started
                             </td>
                           </tr>
                           <tr>
-                            <td style="padding:6px 0;font-size:14px;color:${COLORS.textDark};">
-                              <span style="color:${COLORS.secondary};font-weight:bold;margin-right:8px;">3.</span>
-                              Answer a few quick questions — it only takes a minute!
+                            <td style="padding:5px 0;font-size:14px;color:${COLORS.textDark};">
+                              <span style="color:${COLORS.secondary};font-weight:bold;margin-right:8px;">3.</span>Answer a few quick questions &mdash; it only takes a minute!
                             </td>
                           </tr>
                           <tr>
-                            <td style="padding:6px 0;font-size:14px;color:${COLORS.textDark};">
-                              <span style="color:${COLORS.secondary};font-weight:bold;margin-right:8px;">4.</span>
-                              Share your thoughts on Hygieia and help us grow
+                            <td style="padding:5px 0;font-size:14px;color:${COLORS.textDark};">
+                              <span style="color:${COLORS.secondary};font-weight:bold;margin-right:8px;">4.</span>Share your thoughts on Hygieia and help us grow
                             </td>
                           </tr>
                         </table>
@@ -138,25 +129,43 @@ export function generateFeedbackFormEmail(data: FeedbackFormEmailData): string {
 
               <!-- CTA Button -->
               <tr>
-                <td style="padding: 10px 40px 30px; text-align:center;" class="content">
-                  <a href="${formLink}" class="btn">Fill Out the Form</a>
-                  <p style="font-size:12px;color:${COLORS.textMuted};margin:16px 0 0;">
-                    Or copy this link: <a href="${formLink}" style="color:${COLORS.primary};word-break:break-all;">${formLink}</a>
+                <td align="center" style="padding:10px 40px 30px;" class="content">
+                  <table cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center"
+                        style="background:linear-gradient(135deg,${COLORS.primary},${COLORS.secondary});border-radius:30px;">
+                        <a href="${formLink}"
+                          style="display:inline-block;padding:14px 40px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;letter-spacing:0.4px;border-radius:30px;">
+                          Fill Out the Form
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="font-size:12px;color:${COLORS.textMuted};margin:14px 0 0;">
+                    Or copy this link:&nbsp;<a href="${formLink}" style="color:${COLORS.primary};word-break:break-all;">${formLink}</a>
                   </p>
                 </td>
               </tr>
 
               <!-- Privacy note -->
               <tr>
-                <td style="padding: 0 40px 30px;" class="content">
-                  <p style="font-size:13px;line-height:1.6;color:${COLORS.textMuted};margin:0;text-align:left;border-top:1px solid ${COLORS.lightGray};padding-top:20px;">
-                    🔒 &nbsp;Your responses are kept confidential. No login required — just enter your email on the form. If you have questions, contact us at <a href="mailto:support@hygieia.com" style="color:${COLORS.primary};text-decoration:none;">support@hygieia.com</a>.
-                  </p>
+                <td style="padding:0 40px 28px;" class="content">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="border-top:1px solid ${COLORS.lightGray};padding-top:20px;">
+                        <p style="font-size:13px;line-height:1.6;color:${COLORS.textMuted};margin:0;text-align:left;">
+                          &#x1F512;&nbsp; Your responses are kept confidential. No login required &mdash; just enter your email on the form.
+                          Questions? Contact us at <a href="mailto:support@hygieia.com" style="color:${COLORS.primary};text-decoration:none;">support@hygieia.com</a>.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
 
               <!-- Footer -->
               ${getFooter()}
+
             </table>
           </td>
         </tr>

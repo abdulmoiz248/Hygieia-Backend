@@ -26,6 +26,8 @@ import { generateScanReportCompletionEmail } from '../helpers/generateScanReport
 import { generateWelcomeEmail } from '../helpers/generateWelcomeEmail'
 import { generateWorkerCredentialsEmail } from '../helpers/generateWorkerCredentialsEmail'
 import { generateWorkerGoodbyeEmail } from '../helpers/generateWorkerGoodbyeEmail'
+import { generateReportAcknowledgementEmail } from '../helpers/generateReportAcknowledgementEmail'
+import { generateFeedbackFormEmail } from '../helpers/generateFeedbackFormEmail'
 
 type PreviewItem = {
   category: string
@@ -210,6 +212,27 @@ const items: PreviewItem[] = [
   { category: 'Labs', title: 'Scan report completion', description: 'Scan report ready for download.', html: generateScanReportCompletionEmail(scanReportSample as any) },
   { category: 'Wellness', title: 'Medicine reminder', description: 'Medication adherence reminder.', html: generateMedicineReminderEmail(medicineReminderSample) },
   { category: 'Wellness', title: 'Nutrition summary', description: 'Weekly fitness and nutrition digest.', html: generateNutritionSummaryEmail(nutritionSummarySample as any) },
+  {
+    category: 'Reports',
+    title: 'Report acknowledgement',
+    description: 'Confirms a patient report against a doctor/nutritionist has been received.',
+    html: generateReportAcknowledgementEmail({
+      patient_name: 'Jane Doe',
+      reported_provider_role: 'doctor',
+      report_id: 'c3d4e5f6-a1b2-7890-fedc-ba0987654321',
+    }),
+  },
+  {
+    category: 'Feedback',
+    title: 'Feedback form invitation',
+    description: 'Sent to patients when an admin creates a new feedback form.',
+    html: generateFeedbackFormEmail({
+      formId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      title: 'Patient Satisfaction Survey',
+      description: 'Help us improve your experience on Hygieia. It takes less than 2 minutes.',
+      expiryDate: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+    }),
+  },
 ]
 
 const galleryHtml = `<!doctype html>

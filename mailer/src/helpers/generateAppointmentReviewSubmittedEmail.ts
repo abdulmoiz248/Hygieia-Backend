@@ -1,5 +1,5 @@
 import { AppointmentReviewSubmittedDto } from 'src/appointments/dto/appointment-review-submitted.dto'
-import { HYGIEIA_LOGO } from './utils'
+import { HYGIEIA_LOGO, formatEmailDate } from './utils'
 
 function renderStars(rating: number): string {
   return '★'.repeat(rating) + '☆'.repeat(5 - rating)
@@ -44,7 +44,7 @@ export function generateAppointmentReviewSubmittedEmail(data: AppointmentReviewS
                         <p style="margin:0 0 14px;">Here is a copy of your review for ${providerTitle} <strong>${data.provider_name}</strong>.</p>
 
                         <table class="card" width="100%" cellpadding="0" cellspacing="0" border="0">
-                          <tr><td><p style="margin:0 0 8px;"><strong>Appointment:</strong> ${data.appointment_date} at ${data.appointment_time}</p></td></tr>
+                          <tr><td><p style="margin:0 0 8px;"><strong>Appointment:</strong> ${formatEmailDate(data.appointment_date)} at ${data.appointment_time}</p></td></tr>
                           <tr><td><p style="margin:0 0 8px;"><strong>Rating:</strong> <span class="stars">${renderStars(data.rating)}</span> (${data.rating}/5)</p></td></tr>
                           <tr><td><p style="margin:0;"><strong>Your Review:</strong> ${data.review_text}</p></td></tr>
                         </table>

@@ -137,8 +137,8 @@ export function generateReportAcknowledgementEmail(data: ReportAcknowledgementDa
                   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc;border-radius:12px;padding:16px;text-align:center;">
                     <tr>
                       <td>
-                        <p style="margin:0;font-size:12px;color:${COLORS.textMuted};">Report Reference</p>
-                        <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:${COLORS.primary};letter-spacing:1px;">${data.report_id.slice(0, 8).toUpperCase()}</p>
+                        <p style="margin:0;font-size:12px;color:${COLORS.textMuted};">Your Report Has Been Recorded</p>
+                        <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:${COLORS.primary};">✓</p>
                       </td>
                     </tr>
                   </table>

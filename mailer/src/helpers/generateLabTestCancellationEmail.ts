@@ -1,4 +1,5 @@
 import { LabBookingCancellationDto } from "src/labs/dtos/lab-cancellation-email.dto";
+import { formatEmailDate } from "./utils";
 
 export const HYGIEIA_LOGO = "https://hygieia-frontend.vercel.app/_next/image?url=%2Flogo%2Flogo-2.png&w=128&q=90"
 
@@ -61,10 +62,10 @@ export function generateLabTestCancellationEmail(data: LabBookingCancellationDto
                         <table cellpadding="0" cellspacing="0" border="0" style="margin:20px auto; border-radius:12px; background-color:#fbf9ea; padding:20px; border-left:4px solid #c94141; text-align:left;" class="details">
                           <tr><td><p><strong>Booking ID:</strong> ${booking_id}</p></td></tr>
                           <tr><td><p><strong>Test Name:</strong> ${test_name}</p></td></tr>
-                          <tr><td><p><strong>Originally Scheduled Date:</strong> ${scheduled_date}</p></td></tr>
+                          <tr><td><p><strong>Originally Scheduled Date:</strong> ${formatEmailDate(scheduled_date)}</p></td></tr>
                           <tr><td><p><strong>Originally Scheduled Time:</strong> ${scheduled_time}</p></td></tr>
                           <tr><td><p><strong>Location:</strong> ${location || "Not Provided"}</p></td></tr>
-                          <tr><td><p><strong>Cancellation Date:</strong> ${cancellation_date}</p></td></tr>
+                          <tr><td><p><strong>Cancellation Date:</strong> ${formatEmailDate(cancellation_date)}</p></td></tr>
                           <tr><td><p><strong>Email:</strong> ${patient_email}</p></td></tr>
                         </table>
 

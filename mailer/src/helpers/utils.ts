@@ -16,6 +16,25 @@ export const COLORS = {
 
 export const HYGIEIA_LOGO = "https://hygieia-frontend.vercel.app/_next/image?url=%2Flogo%2Flogo-2.png&w=128&q=90"
 
+/**
+ * Format a date string to readable format like "26 July 2026"
+ * Accepts ISO string, Date object, or string in YYYY-MM-DD format
+ */
+export const formatEmailDate = (dateInput: string | Date): string => {
+  try {
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
+    if (isNaN(date.getTime())) return dateInput as string // Return original if invalid
+    
+    return date.toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+  } catch {
+    return typeof dateInput === 'string' ? dateInput : ''
+  }
+}
+
 export const emailHeaderStyles = `
   background: linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary});
   padding: 40px 30px 50px;

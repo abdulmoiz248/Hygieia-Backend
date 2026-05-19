@@ -1,4 +1,5 @@
 import { AppointmentCancellationDto } from "src/appointments/dto/appointment-cancellation.dto";
+import { formatEmailDate } from "./utils";
 
 export const HYGIEIA_LOGO = "https://hygieia-frontend.vercel.app/_next/image?url=%2Flogo%2Flogo-2.png&w=128&q=90"
 
@@ -84,12 +85,11 @@ export function generateAppointmentCancellationEmail(data: AppointmentCancellati
                         <h2>Hey ${patient_name},</h2>
                         <p>Your appointment with <strong>Dr. ${doctor_name}</strong> has been successfully cancelled.</p>
                         <table cellpadding="0" cellspacing="0" border="0" style="margin:20px auto; border-radius:12px; background-color:#fbf9ea; padding:20px; border-left:4px solid #c94141; text-align:left;" class="details">
-                          <tr><td><p><strong>Appointment ID:</strong> ${appointment_id}</p></td></tr>
                           <tr><td><p><strong>Doctor:</strong> Dr. ${doctor_name}</p></td></tr>
-                          <tr><td><p><strong>Originally Scheduled Date:</strong> ${appointment_date.split('T')[0]}</p></td></tr>
+                          <tr><td><p><strong>Originally Scheduled Date:</strong> ${formatEmailDate(appointment_date)}</p></td></tr>
                           <tr><td><p><strong>Originally Scheduled Time:</strong> ${appointment_time}</p></td></tr>
                           <tr><td><p><strong>Mode:</strong> ${appointment_mode}</p></td></tr>
-                          <tr><td><p><strong>Cancellation Date:</strong> ${cancellation_date}</p></td></tr>
+                          <tr><td><p><strong>Cancellation Date:</strong> ${formatEmailDate(cancellation_date)}</p></td></tr>
                           <tr><td><p><strong>Reason:</strong> ${reasonDisplay}</p></td></tr>
                           ${cancellation_notes ? `<tr><td><p><strong>Additional Notes:</strong> ${cancellation_notes}</p></td></tr>` : ''}
                           <tr><td><p><strong>Email:</strong> ${patient_email}</p></td></tr>

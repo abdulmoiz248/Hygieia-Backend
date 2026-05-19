@@ -1,4 +1,5 @@
 import { AppointmentDto } from "src/appointments/dto/appointment.dto";
+import { formatEmailDate } from "./utils";
 
 export const HYGIEIA_LOGO = "https://hygieia-frontend.vercel.app/_next/image?url=%2Flogo%2Flogo-2.png&w=128&q=90"
 
@@ -72,7 +73,7 @@ export function generateAppointmentConfirmationEmail(data: AppointmentDto): stri
                         <h2>Hey ${patient_name},</h2>
                         <p>Your appointment with <strong>Dr. ${doctor_name}</strong> has been successfully booked!</p>
                         <table cellpadding="0" cellspacing="0" border="0" style="margin:20px auto; border-radius:12px; background-color:#fbf9ea; padding:20px; border-left:4px solid #008396; text-align:left;" class="details">
-                          <tr><td><p><strong>Date:</strong> ${appointment_date.split('T')[0]}</p></td></tr>
+                          <tr><td><p><strong>Date:</strong> ${formatEmailDate(appointment_date)}</p></td></tr>
                           <tr><td><p><strong>Time:</strong> ${appointment_time}</p></td></tr>
                           <tr><td><p><strong>Mode:</strong> ${appointment_mode}</p></td></tr>
                           <tr><td><p><strong>Email:</strong> ${patient_email}</p></td></tr>

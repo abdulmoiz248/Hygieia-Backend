@@ -1,4 +1,5 @@
 import { AppointmentUpdateDto } from "src/appointments/dto/appointment-update.dto";
+import { formatEmailDate } from "./utils";
 
 export const HYGIEIA_LOGO = "https://hygieia-frontend.vercel.app/_next/image?url=%2Flogo%2Flogo-2.png&w=128&q=90"
 
@@ -86,8 +87,8 @@ export function generateAppointmentUpdateEmail(data: AppointmentUpdateDto): stri
                         <table cellpadding="0" cellspacing="0" border="0" style="margin:20px auto; border-radius:12px; background-color:#fff3cd; padding:15px; border-left:4px solid #f39c12; text-align:left;" class="details">
                           <tr><td><p style="margin:0; font-weight:bold; color:#856404;">⚠️ Schedule Changed</p></td></tr>
                           ${hasDateChange ? `
-                          <tr><td><p><strong>Previous Date:</strong> ${previous_date.split('T')[0]}</p></td></tr>
-                          <tr><td><p><strong>New Date:</strong> <span class="highlight">${appointment_date.split('T')[0]}</span></p></td></tr>
+                          <tr><td><p><strong>Previous Date:</strong> ${formatEmailDate(previous_date)}</p></td></tr>
+                          <tr><td><p><strong>New Date:</strong> <span class="highlight">${formatEmailDate(appointment_date)}</span></p></td></tr>
                           ` : ''}
                           ${hasTimeChange ? `
                           <tr><td><p><strong>Previous Time:</strong> ${previous_time}</p></td></tr>
@@ -97,9 +98,8 @@ export function generateAppointmentUpdateEmail(data: AppointmentUpdateDto): stri
                         ` : ''}
                         
                         <table cellpadding="0" cellspacing="0" border="0" style="margin:20px auto; border-radius:12px; background-color:#fbf9ea; padding:20px; border-left:4px solid #008396; text-align:left;" class="details">
-                          <tr><td><p><strong>Appointment ID:</strong> ${appointment_id}</p></td></tr>
                           <tr><td><p><strong>Doctor:</strong> Dr. ${doctor_name}</p></td></tr>
-                          <tr><td><p><strong>Date:</strong> ${appointment_date.split('T')[0]}</p></td></tr>
+                          <tr><td><p><strong>Date:</strong> ${formatEmailDate(appointment_date)}</p></td></tr>
                           <tr><td><p><strong>Time:</strong> ${appointment_time}</p></td></tr>
                           <tr><td><p><strong>Mode:</strong> ${appointment_mode}</p></td></tr>
                           <tr><td><p><strong>Email:</strong> ${patient_email}</p></td></tr>

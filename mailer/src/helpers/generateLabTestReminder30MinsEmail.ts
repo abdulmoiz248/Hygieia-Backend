@@ -1,4 +1,5 @@
 import { LabBookingConfirmationDto } from "src/labs/dtos/lab-booking-confirmation.dto"
+import { formatEmailDate } from "./utils"
 
 export const HYGIEIA_LOGO = "https://hygieia-frontend.vercel.app/_next/image?url=%2Flogo%2Flogo-2.png&w=128&q=90"
 
@@ -45,7 +46,7 @@ export function generateLabTestReminder30MinsEmail(data: LabBookingConfirmationD
 
                     <table style="margin:20px auto;border-radius:12px;background-color:#fbf9ea;padding:20px;border-left:4px solid #c73d2b;text-align:left;" class="details">
                       <tr><td><p><strong>Booking ID:</strong> ${booking_id}</p></td></tr>
-                      <tr><td><p><strong>Date:</strong> ${scheduled_date.split('T')[0]}</p></td></tr>
+                      <tr><td><p><strong>Date:</strong> ${formatEmailDate(scheduled_date)}</p></td></tr>
                       <tr><td><p><strong>Time:</strong> ${scheduled_time}</p></td></tr>
                       <tr><td><p><strong>Email:</strong> ${patient_email}</p></td></tr>
                       <tr><td><p><strong>Location:</strong> ${location || "Not Provided"}</p></td></tr>

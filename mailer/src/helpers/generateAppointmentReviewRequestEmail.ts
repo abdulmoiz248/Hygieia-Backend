@@ -1,5 +1,5 @@
 import { AppointmentReviewRequestDto } from 'src/appointments/dto/appointment-review-request.dto'
-import { HYGIEIA_LOGO } from './utils'
+import { HYGIEIA_LOGO, formatEmailDate } from './utils'
 
 export function generateAppointmentReviewRequestEmail(data: AppointmentReviewRequestDto): string {
   const providerTitle = data.provider_role === 'nutritionist' ? 'Nutritionist' : 'Doctor'
@@ -40,7 +40,7 @@ export function generateAppointmentReviewRequestEmail(data: AppointmentReviewReq
                         <p style="margin:0 0 14px;">Please share your feedback for ${providerTitle} <strong>${data.provider_name}</strong>.</p>
 
                         <table class="card" width="100%" cellpadding="0" cellspacing="0" border="0">
-                          <tr><td><p style="margin:0 0 8px;"><strong>Date:</strong> ${data.appointment_date}</p></td></tr>
+                          <tr><td><p style="margin:0 0 8px;"><strong>Date:</strong> ${formatEmailDate(data.appointment_date)}</p></td></tr>
                           <tr><td><p style="margin:0 0 8px;"><strong>Time:</strong> ${data.appointment_time}</p></td></tr>
                           <tr><td><p style="margin:0;"><strong>Mode:</strong> ${data.appointment_mode || 'N/A'}</p></td></tr>
                         </table>

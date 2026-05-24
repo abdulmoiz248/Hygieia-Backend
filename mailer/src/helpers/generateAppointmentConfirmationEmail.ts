@@ -86,7 +86,7 @@ export function generateAppointmentConfirmationEmail(data: AppointmentDto): stri
                         ${
                           appointment_link
                             ? `
-                              <table cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;">
+                              <table cellpadding="0" cellspacing="0" border="0" style="margin:20px auto;" align="center">
                                 <tr>
                                   <td style="background-color:#f5f5f5; border-radius:12px; padding:15px; text-align:left; line-height:1.5; color:#17433b;" class="instructions">
                                     <p><strong>Before your online appointment:</strong></p>
@@ -103,7 +103,7 @@ export function generateAppointmentConfirmationEmail(data: AppointmentDto): stri
                               <a href="${appointment_link}" class="btn" style="color:#ffffff;">Join Appointment</a>
                             `
                             : `
-                              <table cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;">
+                              <table cellpadding="0" cellspacing="0" border="0" style="margin:20px auto;" align="center">
                                 <tr>
                                   <td style="background-color:#f5f5f5; border-radius:12px; padding:15px; text-align:left; line-height:1.5; color:#17433b;" class="instructions">
                                     <p><strong>Before your in-person appointment:</strong></p>

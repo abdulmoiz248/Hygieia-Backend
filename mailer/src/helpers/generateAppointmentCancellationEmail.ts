@@ -46,15 +46,16 @@ export function generateAppointmentCancellationEmail(data: AppointmentCancellati
         }
         .btn {
           display: inline-block;
-          background-color: #008396;
+          background-color: #c94141;
           color: #ffffff !important;
           padding: 12px 24px;
           border-radius: 8px;
           text-decoration: none;
           margin-top: 20px;
+          font-weight: 600;
         }
         .btn:hover {
-          background-color: #46bba5;
+          background-color: #b53636;
         }
         @media (max-width:480px){
           .content { padding:20px !important; }
@@ -109,9 +110,9 @@ export function generateAppointmentCancellationEmail(data: AppointmentCancellati
                           </tr>
                         </table>
 
-                        <table cellpadding="0" cellspacing="0" border="0" style="margin-top:25px;">
+                        <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:25px auto 0;">
                           <tr>
-                            <td style="text-align:center;">
+                            <td align="center" style="text-align:center;">
                               <p style="color:#666; font-size:14px; margin-bottom:10px;">Need help or want to book again?</p>
                               <a href="https://hygieia-frontend.vercel.app/appointments" class="btn" style="color:#ffffff;">Book New Appointment</a>
                             </td>

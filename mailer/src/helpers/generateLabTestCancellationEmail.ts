@@ -32,10 +32,24 @@ export function generateLabTestCancellationEmail(data: LabBookingCancellationDto
           padding-left: 18px;
           margin: 8px 0;
         }
+        .btn {
+          display: inline-block;
+          background-color: #c94141;
+          color: #ffffff !important;
+          padding: 12px 30px;
+          border-radius: 8px;
+          text-decoration: none;
+          margin-top: 20px;
+          font-weight: 600;
+        }
+        .btn:hover {
+          background-color: #b53636;
+        }
         @media (max-width:480px){
           .content { padding:20px !important; }
           h2 { font-size:18px !important; }
           .details, .instructions { width:90% !important; }
+          .btn { width:100% !important; text-align:center !important; }
         }
       </style>
     </head>
@@ -83,11 +97,11 @@ export function generateLabTestCancellationEmail(data: LabBookingCancellationDto
                           </tr>
                         </table>
 
-                        <table cellpadding="0" cellspacing="0" border="0" style="margin-top:25px;">
+                        <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:25px auto 0;">
                           <tr>
-                            <td style="text-align:center;">
+                            <td align="center" style="text-align:center;">
                               <p style="color:#666; font-size:14px; margin-bottom:10px;">Need help or want to book again?</p>
-                              <a href="https://hygieia-frontend.vercel.app/lab-tests" style="display:inline-block; background-color:#008396; color:white; padding:12px 30px; text-decoration:none; border-radius:8px; font-weight:bold;">Browse Lab Tests</a>
+                              <a href="https://hygieia-frontend.vercel.app/lab-tests" class="btn" style="color:#ffffff;">Browse Lab Tests</a>
                             </td>
                           </tr>
                         </table>

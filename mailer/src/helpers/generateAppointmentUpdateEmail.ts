@@ -38,15 +38,16 @@ export function generateAppointmentUpdateEmail(data: AppointmentUpdateDto): stri
         }
         .btn {
           display: inline-block;
-          background-color: #008396;
+          background-color: #f39c12;
           color: #ffffff !important;
           padding: 12px 24px;
           border-radius: 8px;
           text-decoration: none;
           margin-top: 20px;
+          font-weight: 600;
         }
         .btn:hover {
-          background-color: #46bba5;
+          background-color: #f9a825;
         }
         .highlight {
           background-color: #fff3cd;
@@ -131,9 +132,9 @@ export function generateAppointmentUpdateEmail(data: AppointmentUpdateDto): stri
                         </table>
 
                         ${appointment_link ? `
-                        <table cellpadding="0" cellspacing="0" border="0" style="margin-top:25px;">
+                        <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:25px auto 0;">
                           <tr>
-                            <td style="text-align:center;">
+                            <td align="center" style="text-align:center;">
                               <a href="${appointment_link}" class="btn" style="color:#ffffff;">Join Appointment</a>
                             </td>
                           </tr>

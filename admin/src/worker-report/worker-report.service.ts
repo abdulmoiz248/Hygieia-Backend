@@ -612,7 +612,7 @@ export class WorkerReportService {
         .order('publishedat', { ascending: false }),
       supabase
         .from('appointment_reviews')
-        .select('id, patient_id, rating, created_at')
+        .select('id, appointment_id, patient_id, provider_role, rating, review_text, created_at')
         .eq('provider_id', workerId)
         .eq('provider_role', 'doctor')
         .order('created_at', { ascending: false }),
@@ -787,7 +787,7 @@ export class WorkerReportService {
         .order('created_at', { ascending: false }),
       supabase
         .from('appointment_reviews')
-        .select('id, patient_id, rating, created_at')
+        .select('id, appointment_id, patient_id, provider_role, rating, review_text, created_at')
         .eq('provider_id', workerId)
         .eq('provider_role', 'nutritionist')
         .order('created_at', { ascending: false }),

@@ -102,6 +102,8 @@ export class FeedbackFormService {
   }
 
   async getFormById(formId: string) {
+    this.logger.log(`Fetching feedback form by id=${formId}`);
+
     const { data, error } = await this.supabaseService
       .getClient()
       .from('feedback_forms')
@@ -109,14 +111,19 @@ export class FeedbackFormService {
       .eq('id', formId)
       .single();
 
-    if (error || !data) {
+    if (error) {
+      this.logger.error(
+        `Supabase error fetching form ${formId}: code=${error.code} message="${error.message}" details="${error.details}" hint="${error.hint}"`,
+      );
+      throw new NotFoundException(`Feedback form not found: ${error.message}`);
+    }
+
+    if (!data) {
+      this.logger.warn(`No data returned for form ${formId}`);
       throw new NotFoundException('Feedback form not found');
     }
 
-    if (new Date(data.expiry_date) < new Date()) {
-      throw new BadRequestException('Feedback form has expired');
-    }
-
+    this.logger.log(`Successfully fetched form ${formId} (expired=${new Date(data.expiry_date) < new Date()})`);
     return data;
   }
 
@@ -146,6 +153,7 @@ export class FeedbackFormService {
   }
 
   async getAllForms(userId: string) {
+    this.logger.log(`Fetching all feedback forms for admin ${userId}`);
     await this.verifyAdmin(userId);
 
     const { data, error } = await this.supabaseService
@@ -155,13 +163,18 @@ export class FeedbackFormService {
       .order('created_at', { ascending: false });
 
     if (error) {
-      throw new InternalServerErrorException('Failed to fetch forms');
+      this.logger.error(
+        `Supabase error fetching all forms: code=${error.code} message="${error.message}" details="${error.details}"`,
+      );
+      throw new InternalServerErrorException(`Failed to fetch forms: ${error.message}`);
     }
 
+    this.logger.log(`Fetched ${data?.length ?? 0} feedback forms`);
     return data;
   }
 
   async getFormResults(formId: string, userId: string) {
+    this.logger.log(`Fetching results for form ${formId} by admin ${userId}`);
     await this.verifyAdmin(userId);
 
     const { data, error } = await this.supabaseService
@@ -172,9 +185,13 @@ export class FeedbackFormService {
       .order('created_at', { ascending: false });
 
     if (error) {
-      throw new InternalServerErrorException('Failed to fetch form results');
+      this.logger.error(
+        `Supabase error fetching results for form ${formId}: code=${error.code} message="${error.message}" details="${error.details}"`,
+      );
+      throw new InternalServerErrorException(`Failed to fetch form results: ${error.message}`);
     }
 
+    this.logger.log(`Fetched ${data?.length ?? 0} responses for form ${formId}`);
     return data;
   }
 

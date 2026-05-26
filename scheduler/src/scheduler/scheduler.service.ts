@@ -146,6 +146,15 @@ export class SchedulerService {
           (plan) => plan.patient_id === patientId && this.isRangeActiveOnDate(plan.start_date, plan.end_date, today),
         )
 
+        // If no active prescriptions and no active diet plan, skip this patient
+        // to preserve their existing adherence score from the last active period
+        if (prescriptionIds.length === 0 && !activeDietPlanAssigned) {
+          this.logger.debug(
+            `Skipping patient ${patientId}: no active prescriptions or diet plans. Adherence preserved.`,
+          )
+          continue
+        }
+
         let medicationLogs: MedicationAdherenceLogRecord[] = []
 
         if (prescriptionIds.length > 0) {

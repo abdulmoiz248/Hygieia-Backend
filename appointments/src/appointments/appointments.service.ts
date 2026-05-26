@@ -1817,18 +1817,8 @@ private async refreshPatientAdherenceMetrics(patientId: string) {
 
   const prescriptionIds = activePrescriptions.map((item) => item.id)
 
-  let medicationLogs: MedicationAdherenceRow[] = []
-  if (prescriptionIds.length > 0) {
-    const { data: logs, error: logsError } = await this.supabase
-      .from('medication_adherence_logs')
-      .select('id, patient_id, prescription_id, medication_id, taken, taken_at, scheduled_time, source, created_at, updated_at')
-      .eq('patient_id', patientId)
-      .in('prescription_id', prescriptionIds)
-
-    if (logsError) throw new BadRequestException(logsError.message)
-    medicationLogs = (logs as MedicationAdherenceRow[]) || []
-  }
-
+  // If no active prescriptions and no active diet plan, skip update
+  // to preserve existing adherence score from the last active period
   const { data: dietPlans, error: dietPlansError } = await this.supabase
     .from('diet_plan')
     .select('start_date, end_date')
@@ -1841,6 +1831,22 @@ private async refreshPatientAdherenceMetrics(patientId: string) {
     const endsOk = !plan.end_date || plan.end_date >= today
     return startsOk && endsOk
   })
+
+  if (prescriptionIds.length === 0 && !hasActiveDietPlan) {
+    return // preserve existing adherence values
+  }
+
+  let medicationLogs: MedicationAdherenceRow[] = []
+  if (prescriptionIds.length > 0) {
+    const { data: logs, error: logsError } = await this.supabase
+      .from('medication_adherence_logs')
+      .select('id, patient_id, prescription_id, medication_id, taken, taken_at, scheduled_time, source, created_at, updated_at')
+      .eq('patient_id', patientId)
+      .in('prescription_id', prescriptionIds)
+
+    if (logsError) throw new BadRequestException(logsError.message)
+    medicationLogs = (logs as MedicationAdherenceRow[]) || []
+  }
 
   const stats = this.calculateMedicationStatsForPatient(activePrescriptions, medicationLogs, today, hasActiveDietPlan)
 

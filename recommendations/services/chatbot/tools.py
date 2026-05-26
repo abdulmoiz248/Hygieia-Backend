@@ -82,8 +82,14 @@ async def dispatch_read_tool(
             include_expired = args.get("include_expired", False)
             if isinstance(all_prescriptions, list):
                 for p in all_prescriptions:
-                    end_date = p.get("endDate")
-                    if include_expired or not end_date or end_date >= today:
+                    # API returns snake_case fields (end_date, status)
+                    end_date = p.get("end_date") or p.get("endDate")
+                    status = (p.get("status") or "").lower()
+                    if include_expired:
+                        d.append(p)
+                    elif status == "completed":
+                        continue
+                    elif not end_date or end_date >= today:
                         d.append(p)
         elif name == "read_medication_logs":
             d = await gateway.get_medication_logs(

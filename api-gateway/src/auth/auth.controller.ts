@@ -26,6 +26,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto'
 import { UpsertUserProfileDto } from './dto/upsert-user-profile.dto'
 import { DeleteWorkerDto } from './dto/delete-worker.dto'
 import { UserRoleCountsResponseDto } from './dto/user-role-counts.dto'
+import { TotalUserCountResponseDto } from './dto/total-user-count.dto'
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -208,6 +209,40 @@ export class AuthController {
     }
   }
 
+  @Get('total-users')
+  @ApiOperation({
+    summary: 'Get total number of users (Public)',
+    description:
+      'Returns the total number of registered users on the platform. This is a public endpoint and does not require authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Total user count retrieved successfully',
+    type: TotalUserCountResponseDto,
+    schema: {
+      example: {
+        statusCode: 200,
+        message: 'Total user count fetched successfully',
+        success: true,
+        data: {
+          totalUsers: 241,
+          success: true,
+          message: 'Total user count fetched successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Failed to fetch total user count',
+  })
+  async getTotalUserCount() {
+    try {
+      return await firstValueFrom(this.authClient.send({ cmd: 'total-user-count' }, {}))
+    } catch (e: any) {
+      throw new BadRequestException(e?.message || 'Failed to fetch total user count')
+    }
+  }
 
   @Get('user')
   @ApiOperation({ 

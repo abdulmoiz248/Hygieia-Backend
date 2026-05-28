@@ -238,6 +238,16 @@ async getUserRoleCounts() {
   }
 }
 
+@MessagePattern({ cmd: 'total-user-count' })
+async getTotalUserCount() {
+  try {
+    const result = await this.auth.getTotalUserCount()
+    return createSuccessResponse('Total user count fetched successfully', result, 200)
+  } catch (error: any) {
+    return createErrorResponse(error.message || 'Failed to fetch total user count', error.detail, error.status || 400)
+  }
+}
+
 
 @MessagePattern({ cmd: 'upload-user-photo' })
 async uploadUserPhoto(payload: { role: string; userId: string; fileBuffer: Buffer }) {

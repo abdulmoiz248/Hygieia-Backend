@@ -902,6 +902,27 @@ export class AuthService {
     }
   }
 
+  async getTotalUserCount() {
+    console.log('[INFO: AUTH SERVICE] Getting total user count')
+
+    const { count, error } = await this.supabase.getClient()
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+
+    if (error) {
+      console.error(`[INFO: AUTH SERVICE] Failed to fetch total user count: ${error.message}`)
+      throw new BadRequestException('Failed to fetch total user count')
+    }
+
+    const totalUsers = count || 0
+    console.log(`[INFO: AUTH SERVICE] Total user count: ${totalUsers}`)
+    return {
+      totalUsers,
+      success: true,
+      message: 'Total user count fetched successfully',
+    }
+  }
+
   private normalizeRoleForCounts(role: string): string {
     if (!role) {
       return 'unknown'

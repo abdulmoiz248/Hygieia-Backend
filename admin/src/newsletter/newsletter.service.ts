@@ -82,7 +82,7 @@ DESIGN SYSTEM (modern 2025+ email aesthetics):
    - Include: © ${new Date().getFullYear()} Hygieia. All rights reserved.
    - Small links: Website (https://hygieia-frontend.vercel.app) | Blogs (https://hygieia-frontend.vercel.app/blogs)
    - "You received this because you subscribed to the Hygieia newsletter."
-   - Include an unsubscribe placeholder link.
+   - Include an unsubscribe link with href="#unsubscribe" and text "Unsubscribe". This will be replaced with the actual per-subscriber URL at send time.
    - Today's date: ${new Date().toLocaleDateString()}
 8. HEADER / NAV BAR:
    - Clean top bar with white/off-white background, "HYGIEIA" logo text on the left in #008396 (bold, 22px, letter-spacing: 3px).
@@ -315,7 +315,7 @@ DESIGN SYSTEM (modern 2025+ email aesthetics):
     - Include: © ${new Date().getFullYear()} Hygieia. All rights reserved.
     - Small links: Website (https://hygieia-frontend.vercel.app) | Blogs (https://hygieia-frontend.vercel.app/blogs)
     - "You received this because you subscribed to the Hygieia newsletter."
-    - Include an unsubscribe placeholder link.
+    - Include an unsubscribe link with href="#unsubscribe" and text "Unsubscribe". This will be replaced with the actual per-subscriber URL at send time.
     - Today's date: ${new Date().toLocaleDateString()}
 11. NO IMAGES — rely entirely on typography, color, spacing, and layout for visual impact.
 12. WHITESPACE: Be generous. Use at least 24px padding in content areas, 16px between paragraphs. Let the design breathe.

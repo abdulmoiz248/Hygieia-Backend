@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable ,Inject} from '@nestjs/common';
+import { BadRequestException, Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientProxy } from '@nestjs/microservices/client/client-proxy';
 import { SupabaseClient, createClient } from '@supabase/supabase-js'
@@ -36,7 +36,7 @@ export class NewsletterService {
 
     if (error) throw new BadRequestException(error.message);
     if (!data || data.length === 0) {
-      throw new BadRequestException('Email not found in newsletter subscribers');
+      throw new NotFoundException('Email not found in newsletter subscribers');
     }
 
     console.log(`[INFO NEWSLETTER MS] Unsubscribed email: ${email}`);

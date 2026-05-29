@@ -53,7 +53,8 @@ export function generateNewsletterSubscriptionEmail(email: string): string {
                         <p>Thanks for subscribing to the Hygieia Newsletter using <strong>${email}</strong>.</p>
                         <p>You’ll now get updates on new features, health insights, AI-powered tools, and exclusive early previews — straight to your inbox.</p>
                         <p style="margin-top:20px;color:#17433b;">
-                          We’re stoked to have you on board. If you ever change your mind, you can unsubscribe anytime.
+                          We're stoked to have you on board. If you ever change your mind, you can
+                          <a href="https://hygieia-frontend.vercel.app/unsubscribe-newsletter?email=${encodeURIComponent(email)}" style="color:#008396;text-decoration:underline;">unsubscribe anytime</a>.
                         </p>
                       </td>
                     </tr>

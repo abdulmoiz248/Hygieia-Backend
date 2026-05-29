@@ -7,6 +7,7 @@ import {
   Body,
   UnauthorizedException,
   BadRequestException,
+  NotFoundException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -84,12 +85,23 @@ export class NewsletterController {
     }
   })
   @ApiResponse({
+    status: 404,
+    description: 'Email not found in newsletter subscribers',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Email not found in newsletter subscribers',
+        error: 'Not Found'
+      }
+    }
+  })
+  @ApiResponse({
     status: 400,
-    description: 'Email not found or validation error',
+    description: 'Validation error or bad request',
     schema: {
       example: {
         statusCode: 400,
-        message: 'Email not found in newsletter subscribers',
+        message: 'Email is required',
         success: false
       }
     }
@@ -103,7 +115,11 @@ export class NewsletterController {
         )
       );
     } catch (e: any) {
-      throw new BadRequestException(e?.message || 'Newsletter unsubscribe failed');
+      const message = e?.message || 'Newsletter unsubscribe failed';
+      if (message.toLowerCase().includes('not found')) {
+        throw new NotFoundException(message);
+      }
+      throw new BadRequestException(message);
     }
   }
 

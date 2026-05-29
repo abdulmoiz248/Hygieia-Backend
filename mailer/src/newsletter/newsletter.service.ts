@@ -27,10 +27,26 @@ export class NewsletterService {
         }
 
         const subject = data.subject?.trim() || 'Hygieia Newsletter';
-        const html = data.html;
+        const baseHtml = data.html;
 
         const sendResults = await Promise.allSettled(
-            emails.map((email) => this.mailService.sendMail(email, subject, html)),
+            emails.map((email) => {
+                const unsubscribeUrl = `https://hygieia-frontend.vercel.app/unsubscribe-newsletter?email=${encodeURIComponent(email)}`;
+                // Replace any placeholder unsubscribe href in the AI-generated HTML
+                let personalizedHtml = baseHtml.replace(
+                    /href="[^"]*unsubscribe[^"]*"/gi,
+                    `href="${unsubscribeUrl}"`,
+                );
+                // If no placeholder was found, append an unsubscribe footer
+                if (!personalizedHtml.includes(unsubscribeUrl)) {
+                    const unsubscribeFooter = `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="text-align:center;padding:16px;"><tr><td><a href="${unsubscribeUrl}" style="color:rgba(255,255,255,0.7);font-size:12px;text-decoration:underline;">Unsubscribe from this newsletter</a></td></tr></table>`;
+                    personalizedHtml = personalizedHtml.replace(
+                        /<\/body>/i,
+                        `${unsubscribeFooter}</body>`,
+                    );
+                }
+                return this.mailService.sendMail(email, subject, personalizedHtml);
+            }),
         );
 
         const sentCount = sendResults.filter((result) => result.status === 'fulfilled').length;

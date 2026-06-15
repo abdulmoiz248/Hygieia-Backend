@@ -106,9 +106,9 @@ export function generateMedicineReminderEmail(data: MedicineReminderData): strin
           cursor: pointer;
         }
         .footer { background: ${COLORS.background}; border-top: 1px solid ${COLORS.lightGray}; padding: 25px; text-align: center; font-size: 12px; }
-        .container { max-width: 650px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
-        .header { background: linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary}); color: white; text-align: center; padding: 45px 30px; }
-        .content { padding: 35px 30px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+        .header { background: linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary}); color: white; text-align: center; padding: 40px 24px; }
+        .content { padding: 28px 24px; }
         @media(max-width: 600px) {
           .container { margin: 0 !important; border-radius: 0 !important; }
           .header { padding: 30px 20px !important; }
@@ -134,13 +134,11 @@ export function generateMedicineReminderEmail(data: MedicineReminderData): strin
               <div class="content">
                 <h2>Hi ${patientName},</h2>
 
-                <div class="alert-box">
+                <div class="alert-box" style="background: linear-gradient(135deg, #f8fafc, #f4f7fb); border:1px solid ${COLORS.lightGray};">
                   <div class="alert-icon">⏰</div>
                   <div style="flex: 1;">
-                    <p style="margin: 0; font-weight: 700; color: #854d0e; font-size: 16px;">It's time to take your medicines!</p>
-                    <p style="margin: 8px 0 0; font-size: 14px; color: #92400e;">
-                      ${reminderMessage || 'This is a reminder to take your scheduled medications on time.'}
-                    </p>
+                    <p style="margin: 0; font-weight: 700; color: ${COLORS.primary}; font-size: 16px;">Time to take your medication</p>
+                    <p style="margin: 8px 0 0; font-size: 14px; color: ${COLORS.textMuted};">${reminderMessage || 'This is a reminder to take your scheduled medications on time.'}</p>
                   </div>
                 </div>
 
@@ -151,8 +149,8 @@ export function generateMedicineReminderEmail(data: MedicineReminderData): strin
                 </div>
 
                 <h3 style="color: ${COLORS.gray}; margin-top: 25px;">📋 Your Medications</h3>
-                <div class="medication-card">
-                  <h3 style="margin: 0 0 12px; font-size: 16px; color: ${COLORS.primary};">✓ Take These Medications:</h3>
+                <div class="medication-card" style="background: transparent; border:1px solid ${COLORS.lightGray};">
+                  <h3 style="margin: 0 0 12px; font-size: 16px; color: ${COLORS.primary};">Your Medications</h3>
                   <ul class="medication-list">
                     ${medicationsList}
                   </ul>

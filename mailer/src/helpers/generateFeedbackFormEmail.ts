@@ -33,6 +33,9 @@ export function generateFeedbackFormEmail(data: FeedbackFormEmailData): string {
           font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           color: ${COLORS.dark};
         }
+        .form-title { display:block; background: white; border-radius:10px; padding:10px 14px; color:${COLORS.primary}; font-weight:700; font-size:18px; }
+        .form-card { background-color:${COLORS.background};border-radius:16px;border-left:4px solid ${COLORS.secondary};padding:0;margin:0; }
+        .form-card-inner { padding:20px 24px; }
         @media (max-width:480px){
           .content { padding: 20px !important; }
         }
@@ -76,15 +79,12 @@ export function generateFeedbackFormEmail(data: FeedbackFormEmailData): string {
               <!-- Form info card -->
               <tr>
                 <td style="padding:0 40px 20px;" class="content">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                    style="background-color:${COLORS.background};border-radius:16px;border-left:4px solid ${COLORS.secondary};">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0" class="form-card">
                     <tr>
-                      <td style="padding:20px 24px;">
-                        <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${COLORS.primary};">${data.title}</p>
-                        ${data.description ? `<p style="font-size:15px;line-height:1.7;color:${COLORS.textDark};margin:0 0 12px;">${data.description}</p>` : ''}
-                        <p style="font-size:13px;color:${COLORS.textMuted};margin:0;">
-                          &#x23F0;&nbsp; This form expires on <strong style="color:${COLORS.accent};">${expiryFormatted}</strong>
-                        </p>
+                      <td class="form-card-inner">
+                        <span class="form-title">${data.title}</span>
+                        ${data.description ? `<p style="font-size:15px;line-height:1.7;color:${COLORS.textDark};margin:12px 0 12px;">${data.description}</p>` : ''}
+                        <p style="font-size:13px;color:${COLORS.textMuted};margin:0;">&#x23F0;&nbsp; This form expires on <strong style="color:${COLORS.accent};">${expiryFormatted}</strong></p>
                       </td>
                     </tr>
                   </table>

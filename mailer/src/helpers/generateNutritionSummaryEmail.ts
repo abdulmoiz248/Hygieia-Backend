@@ -102,10 +102,14 @@ export function generateNutritionSummaryEmail(data: NutritionSummaryData): strin
           padding: 16px;
           margin: 10px 0;
           border-radius: 12px;
-          text-align: left;
+          text-align: center;
+          min-height: 120px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
         }
         .stat-value { font-size: 28px; font-weight: 700; color: ${COLORS.primary}; }
-        .stat-label { font-size: 12px; color: ${COLORS.textMuted}; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.6px; }
+        .stat-label { font-size: 12px; color: ${COLORS.textMuted}; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.6px; }
         .delta-up { font-size: 12px; color: ${COLORS.secondary}; margin-top: 8px; }
         .delta-down { font-size: 12px; color: ${COLORS.accent}; margin-top: 8px; }
         .delta-flat { font-size: 12px; color: ${COLORS.textMuted}; margin-top: 8px; }
@@ -133,9 +137,9 @@ export function generateNutritionSummaryEmail(data: NutritionSummaryData): strin
           cursor: pointer;
         }
         .footer { background: ${COLORS.background}; border-top: 1px solid ${COLORS.lightGray}; padding: 25px; text-align: center; font-size: 12px; }
-        .container { max-width: 650px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
-        .header { background: linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary}); color: white; text-align: center; padding: 45px 30px; }
-        .content { padding: 35px 30px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+        .header { background: linear-gradient(135deg, ${COLORS.primary}, ${COLORS.secondary}); color: white; text-align: center; padding: 40px 24px; }
+        .content { padding: 28px 24px; }
         .grid-two { width: 100%; }
         .grid-two td { width: 50%; vertical-align: top; border: none; padding: 0 8px; }
         .week-strip {

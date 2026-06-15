@@ -77,7 +77,6 @@ export function generateReportAcknowledgementEmail(data: ReportAcknowledgementDa
               <tr>
                 <td style="padding: 20px 40px 10px;" class="content">
                   <h2 style="font-size:22px;color:${COLORS.gray};margin:0 0 5px;">We Hear You, ${data.patient_name}</h2>
-                  <p style="color:${COLORS.textMuted};font-size:14px;margin:0 0 20px;">Your report has been received</p>
                 </td>
               </tr>
 

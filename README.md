@@ -14,6 +14,8 @@
 
 **Hygieia** is a microservice-based healthcare platform backend that centralizes patient services including authentication, appointments, lab workflows, fitness tracking, medication adherence, AI-powered recommendations, and automated notifications.
 
+🔗 **Project Showcase:** [https://abdul-moiz-b419.vercel.app/hygieia](https://abdul-moiz-b419.vercel.app/hygieia)
+
 ---
 
 ## Table of Contents
